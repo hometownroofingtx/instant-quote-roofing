@@ -319,29 +319,37 @@ class HTR_RR_Admin {
 	/* ---------------- Settings ---------------- */
 	public static function settings() {
 		$s = HTR_RR_Settings::all();
-		self::head( 'Settings', 'Keys are stored in WordPress and never shown to visitors (except the browser key, which Google requires on the page).' );
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+		self::head( 'Settings', 'Manage integrations, customer messaging and report limits.' );
+		echo '<form class="htr-settings-form" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 		wp_nonce_field( 'htr_rr_save' );
-		echo '<input type="hidden" name="action" value="htr_rr_save"><input type="hidden" name="section" value="settings"><table class="form-table"><tbody>';
-		self::field( 'google_browser_key', 'Google browser key', $s['google_browser_key'], 'Maps JavaScript API + Places API (New) + Geocoding + Maps Static. Restrict to your website address in Google Cloud.' );
-		self::secret( 'google_server_key', 'Google server key', $s['google_server_key'], 'Solar API only. Restrict to the Solar API in Google Cloud.' );
-		echo '<tr><th>Imagery quality asked first</th><td><select name="required_quality"><option value="MEDIUM"' . selected( $s['required_quality'], 'MEDIUM', false ) . '>Medium (then base)</option><option value="HIGH"' . selected( $s['required_quality'], 'HIGH', false ) . '>High (then medium, base)</option></select></td></tr>';
-		self::field( 'n8n_webhook_url', 'n8n webhook URL', $s['n8n_webhook_url'], 'Leads go here; n8n creates/updates the GHL contact.' );
-		self::secret( 'n8n_secret', 'n8n shared secret', $s['n8n_secret'], 'Signs every lead (HMAC-SHA256). Must match the n8n workflow.' );
-		self::field( 'company_phone', 'Company phone shown to customers', $s['company_phone'], '' );
-		self::field( 'notify_email', 'Alert email (lead not delivered)', $s['notify_email'], '' );
-		echo '<tr><th>SMS consent - service texts</th><td><textarea name="consent_service" rows="3" class="large-text">' . esc_textarea( $s['consent_service'] ) . '</textarea></td></tr>';
-		echo '<tr><th>SMS consent - marketing texts</th><td><textarea name="consent_marketing" rows="3" class="large-text">' . esc_textarea( $s['consent_marketing'] ) . '</textarea><p class="description">Same two checkboxes as GHL form "Form 30". Confirm the wording matches your A2P campaign.</p></td></tr>';
-		self::field( 'ghl_form_id', 'GHL form ID (for reference)', $s['ghl_form_id'], '' );
-		echo '<tr><th>Customer disclaimer</th><td><textarea name="disclaimer" rows="3" class="large-text">' . esc_textarea( $s['disclaimer'] ) . '</textarea></td></tr>';
-		echo '<tr><th>Reports per visitor per hour</th><td><input type="number" min="1" max="50" name="rate_limit_hour" value="' . esc_attr( $s['rate_limit_hour'] ) . '" class="small-text"></td></tr>';
-		echo '</tbody></table>';
-		submit_button( 'Save settings' );
-		echo '</form><h2>Test the Google Solar API</h2><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+		echo '<input type="hidden" name="action" value="htr_rr_save"><input type="hidden" name="section" value="settings"><div class="htr-settings-grid">';
+		self::settings_card( 'Maps & roof measurements', 'Connect address search and Google Solar measurements.', 'location-alt' );
+		self::field( 'google_browser_key', 'Google browser key', $s['google_browser_key'], 'Used on the customer form for Maps, Places, Geocoding and Static Maps. Restrict it to your website in Google Cloud.' );
+		self::secret( 'google_server_key', 'Google Solar server key', $s['google_server_key'], 'Used only on the server. Restrict it to the Solar API. Leave blank to keep the saved key.' );
+		echo '<tr><th><label for="required_quality">Preferred imagery quality</label></th><td><select id="required_quality" name="required_quality"><option value="MEDIUM"' . selected( $s['required_quality'], 'MEDIUM', false ) . '>Medium (then base)</option><option value="HIGH"' . selected( $s['required_quality'], 'HIGH', false ) . '>High (then medium, base)</option></select><p class="description">If the preferred quality is unavailable, the next supported quality is tried.</p></td></tr></tbody></table></section>';
+		self::settings_card( 'Lead delivery', 'Send customer leads to GoHighLevel through n8n.', 'networking' );
+		self::field( 'n8n_webhook_url', 'n8n webhook URL', $s['n8n_webhook_url'], 'The workflow endpoint that creates or updates the GHL contact.' );
+		self::secret( 'n8n_secret', 'Shared signing secret', $s['n8n_secret'], 'Must match the secret in your n8n workflow. Leave blank to keep the saved value.' );
+		self::field( 'notify_email', 'Delivery alert email', $s['notify_email'], 'Receives an alert when lead delivery exhausts its retries.' );
+		self::field( 'ghl_form_id', 'GHL form ID', $s['ghl_form_id'], 'Identifies the originating form in the lead payload.' );
+		echo '</tbody></table></section>';
+		self::settings_card( 'Customer information', 'Contact details and estimate wording shown to homeowners.', 'admin-users' );
+		self::field( 'company_phone', 'Company phone number', $s['company_phone'], 'Displayed on customer reports and the roof report form.' );
+		echo '<tr><th><label for="htr-settings-disclaimer">Estimate disclaimer</label></th><td><textarea id="htr-settings-disclaimer" name="disclaimer" rows="4">' . esc_textarea( $s['disclaimer'] ) . '</textarea><p class="description">Explains that the displayed price range is an estimate.</p></td></tr></tbody></table></section>';
+		self::settings_card( 'SMS consent', 'Maintain the consent text displayed in the customer form.', 'format-chat' );
+		echo '<tr><th><label for="htr-consent-service">Service text messages</label></th><td><textarea id="htr-consent-service" name="consent_service" rows="5">' . esc_textarea( $s['consent_service'] ) . '</textarea></td></tr><tr><th><label for="htr-consent-marketing">Marketing text messages</label></th><td><textarea id="htr-consent-marketing" name="consent_marketing" rows="5">' . esc_textarea( $s['consent_marketing'] ) . '</textarea><p class="description">Keep both consent statements consistent with GHL Form 30 and your A2P campaign.</p></td></tr></tbody></table></section>';
+		echo '</div><section class="htr-settings-limit"><div><h2>Report usage limit</h2><p>Control how many reports each visitor can request per hour.</p></div><label for="htr-rate-limit">Reports per visitor / hour<input id="htr-rate-limit" type="number" min="1" max="50" name="rate_limit_hour" value="' . esc_attr( $s['rate_limit_hour'] ) . '"></label></section><div class="htr-settings-save">';
+		submit_button( 'Save settings', 'primary', 'submit', false );
+		echo '<span>Blank secret fields keep their saved values.</span></div></form>';
+		echo '<section class="htr-box htr-settings-test"><div class="htr-box-heading"><div><h2>Test Google Solar</h2><p>Run a measurement request using your saved server key. Save any key changes before testing.</p></div><span class="dashicons dashicons-search" aria-hidden="true"></span></div><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 		wp_nonce_field( 'htr_rr_test_solar' );
-		echo '<input type="hidden" name="action" value="htr_rr_test_solar">Latitude <input name="lat" value="29.7946641"> Longitude <input name="lng" value="-98.7319703"> ';
-		submit_button( 'Test (1 free call)', 'secondary', 'submit', false );
-		echo '</form></div>';
+		echo '<input type="hidden" name="action" value="htr_rr_test_solar"><label for="htr-solar-lat">Latitude<input id="htr-solar-lat" name="lat" value="29.7946641"></label><label for="htr-solar-lng">Longitude<input id="htr-solar-lng" name="lng" value="-98.7319703"></label>';
+		submit_button( 'Test connection', 'secondary', 'submit', false );
+		echo '</form></section></div>';
+	}
+
+	private static function settings_card( $title, $description, $icon ) {
+		echo '<section class="htr-box htr-settings-card"><div class="htr-box-heading"><div><h2>' . esc_html( $title ) . '</h2><p>' . esc_html( $description ) . '</p></div><span class="dashicons dashicons-' . esc_attr( $icon ) . '" aria-hidden="true"></span></div><table class="form-table"><tbody>';
 	}
 
 	private static function field( $k, $label, $v, $help ) {
