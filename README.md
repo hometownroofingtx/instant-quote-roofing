@@ -2,7 +2,8 @@
 
 A WordPress plugin for collecting roof-report requests, measuring roofs through Google Solar, calculating estimated price ranges, and sending leads to GoHighLevel through n8n.
 
-**Version:** 1.0.8  
+**Version:** 1.0.8
+
 **Requires:** WordPress 6.0+ and PHP 7.4+
 
 ## Installation
