@@ -34,6 +34,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px
 	</div>
 
 	<?php if ( $v['measured'] ) : ?>
+		<?php if ( ! empty( $v['customerEntered'] ) ) : ?><p class="warn">Calculator estimate using customer-entered roof dimensions. These measurements have not been verified.</p><?php endif; ?>
 		<h2>Roof summary</h2>
 		<div class="g">
 			<div class="t"><span>Total roof area</span><b><?php echo esc_html( number_format( $v['areaSqft'] ) ); ?> sq ft</b></div>
@@ -67,6 +68,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px
 		<?php if ( (int) $v['areaSqft'] < 400 ) : ?>
 			<p class="warn">This measured only <?php echo esc_html( $v['areaSqft'] ); ?> sq ft, which looks like a small structure (shed, carport or garage) rather than the house. Our team will confirm the right building.</p>
 		<?php endif; ?>
+		<?php if ( empty( $v['customerEntered'] ) ) : ?>
 		<div class="dg">
 			<div><h2>3D roof diagram</h2><div id="htr-rr-iso"></div></div>
 			<div><h2>Roof plan view</h2><div id="htr-rr-planbox"></div></div>
@@ -84,6 +86,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px
 			<tr><td><?php echo (int) $i; ?></td><td><?php echo esc_html( number_format( $f['area'] ) ); ?></td><td><?php echo esc_html( $f['pitch'] . '/12' ); ?></td></tr>
 		<?php endforeach; ?>
 		</table>
+		<?php endif; ?>
 		<p class="note">Measured from Google aerial imagery<?php echo $v['imageryDate'] ? ' taken ' . esc_html( substr( $v['imageryDate'], 0, 7 ) ) : ''; ?> (detail level: <?php echo esc_html( strtolower( $v['imageryQuality'] ) ); ?>). Ridge, hip, valley and eave lengths are measured during your free inspection.</p>
 	<?php else : ?>
 		<p class="warn">We could not measure this roof from aerial imagery. Our team has your details and will measure it in person, free of charge.</p>

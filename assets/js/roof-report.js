@@ -4,8 +4,10 @@
 (function () {
   'use strict';
   var C = window.HTR_RR || {};
-  var root = document.getElementById('htr-rr');
-  if (!root) return;
+  document.querySelectorAll('#htr-rr, [data-htr-search-redirect], [data-htr-calculator]').forEach(function (root) {
+  var redirect = root.dataset.htrSearchRedirect;
+  var calculator = root.hasAttribute('data-htr-calculator');
+  var selectedPlaceId = null;
 
   var state = { lat: null, lng: null, address: '', city: '', zip: '', material: '', map: null, marker: null, report: null };
   var $ = function (s, el) { return (el || root).querySelector(s); };
@@ -30,11 +32,12 @@
     $$('.htr-rr-card').forEach(function (c) { if (Number(c.dataset.card) <= n) c.removeAttribute('aria-disabled'); });
     root.dataset.step = String(n);
   }
-  function show(id, msg) { var el = $(id); el.textContent = msg || ''; el.hidden = !msg; }
+  function show(id, msg) { var el = redirect || calculator ? $('[data-address-error]') : $(id); el.textContent = msg || ''; el.hidden = !msg; }
   function focusCard(n) { var c = $('[data-card="' + n + '"]'); if (c && c.scrollIntoView) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
   /* ---------- Google loader (official dynamic bootstrap) ---------- */
   function loadGoogle(key) {
+    if (window.google && window.google.maps && window.google.maps.importLibrary) return;
     /* eslint-disable */
     (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({key:key,v:"weekly"});
     /* eslint-enable */
@@ -47,23 +50,32 @@
     try {
       var places = await google.maps.importLibrary('places');
       var ac = new places.PlaceAutocompleteElement({ includedRegionCodes: ['us'] });
-      ac.id = 'htr-rr-ac';
-      ac.setAttribute('placeholder', 'Enter your property address');
-      $('#htr-rr-search').appendChild(ac);
+      if (!redirect && !calculator) ac.id = 'htr-rr-ac';
+      ac.setAttribute('placeholder', redirect ? 'Enter your full address' : 'Enter your property address');
+      ac.setAttribute('aria-label', 'Property address');
+      (redirect || calculator ? $('[data-address-search]') : $('#htr-rr-search')).appendChild(ac);
+      if (redirect) ac.addEventListener('input', function () { selectedPlaceId = null; });
+      if (calculator) ac.addEventListener('input', function () { state.lat = state.lng = null; state.address = ''; $('[data-calc-address]').textContent = ''; $('[data-calc-inputs]').dispatchEvent(new Event('input')); });
       ac.addEventListener('gmp-select', async function (ev) {
         try {
           var place = ev.placePrediction.toPlace();
           await place.fetchFields({ fields: ['formattedAddress', 'location', 'addressComponents', 'types'] });
-          pick(place.location.lat(), place.location.lng(), place.formattedAddress, place.addressComponents || []);
+          selectPlace(place);
         } catch (e) { show('#htr-rr-err1', 'We could not load that address. Please try again.'); }
       });
       // Older Places event name, in case Google serves it.
       ac.addEventListener('gmp-placeselect', async function (ev) {
         try {
           await ev.place.fetchFields({ fields: ['formattedAddress', 'location', 'addressComponents'] });
-          pick(ev.place.location.lat(), ev.place.location.lng(), ev.place.formattedAddress, ev.place.addressComponents || []);
+          selectPlace(ev.place);
         } catch (e) { show('#htr-rr-err1', 'We could not load that address. Please try again.'); }
       });
+      var placeId = new URLSearchParams(window.location.search).get('htr_place');
+      if (!redirect && placeId && placeId.length <= 512) {
+        var initialPlace = new places.Place({ id: placeId });
+        await initialPlace.fetchFields({ fields: ['formattedAddress', 'location', 'addressComponents'] });
+        selectPlace(initialPlace);
+      }
     } catch (e) {
       show('#htr-rr-err1', 'The map could not load. Please refresh the page or call us' + (C.phone ? ' at ' + C.phone : '') + '.');
     }
@@ -75,6 +87,28 @@
       if (t.indexOf(type) >= 0) return short ? (list[i].shortText || list[i].short_name || '') : (list[i].longText || list[i].long_name || '');
     }
     return '';
+  }
+
+  function selectPlace(place) {
+    var comps = place.addressComponents || [];
+    if (!place.location || (!comp(comps, 'street_number') && !comp(comps, 'premise'))) {
+      show('#htr-rr-err1', 'Please pick your full street address with the house number, not just the city.');
+      return;
+    }
+    if (redirect) {
+      if (!place.id) { show('#htr-rr-err1', 'Please select your address again.'); return; }
+      selectedPlaceId = place.id;
+      show('#htr-rr-err1', '');
+      return;
+    }
+    if (calculator) {
+      state.lat = place.location.lat(); state.lng = place.location.lng(); state.address = place.formattedAddress || '';
+      state.city = comp(comps, 'locality') || comp(comps, 'postal_town'); state.zip = comp(comps, 'postal_code', true);
+      $('[data-calc-address]').textContent = state.address;
+      show('#htr-rr-err1', '');
+      return;
+    }
+    pick(place.location.lat(), place.location.lng(), place.formattedAddress, comps);
   }
 
   function pick(lat, lng, address, comps) {
@@ -118,6 +152,76 @@
       note.classList.toggle('htr-rr-error', j.areaSqft < 400 || !j.markerOnRoof);
     } catch (e) { if (seq === pvSeq) { facts.innerHTML = ''; note.textContent = 'Preview not available right now. You can still continue.'; } }
   }
+  if (calculator) { initCalculator(); initSearch(); return; }
+
+  function initCalculator() {
+    var inputs = $('[data-calc-inputs]'), lead = $('[data-calc-lead]'), result = $('[data-calc-result]');
+    var submitted = false;
+    function data() {
+      return { material: inputs.elements.material.value, area_sqft: inputs.elements.area_sqft.value, pitch_x12: inputs.elements.pitch_x12.value, faces: inputs.elements.faces.value, town: inputs.elements.town.value, lat: state.lat, lng: state.lng };
+    }
+    function error(message) { var el = $('[data-calc-error]'); el.textContent = message || ''; el.hidden = !message; }
+    function invalidate() { if (!submitted) { result.hidden = true; result.textContent = ''; } }
+    inputs.addEventListener('input', invalidate);
+    inputs.addEventListener('change', invalidate);
+    inputs.addEventListener('reset', function (ev) { if (submitted) { ev.preventDefault(); return; } error(''); invalidate(); });
+    inputs.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      if (!inputs.reportValidity()) return;
+      var search = $('[data-address-search] gmp-place-autocomplete');
+      if (!state.address && search) search.focus();
+      else lead.elements.first_name.focus();
+    });
+    function renderEstimate(j) {
+        var e = j.estimate;
+        var row = function (k, v) { return '<div><dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd></div>'; };
+        result.innerHTML = '<div class="htr-rr-calc-range"><span>Estimated roof price</span><strong>' + (e.low == null ? 'On-site quote' : money(e.low) + ' – ' + money(e.high)) + '</strong><p>' + esc(e.material_label + ' · ' + j.town) + '</p>' + (e.low == null ? '' : '<div class="htr-rr-calc-bounds"><div><span>Low estimate</span><b>' + esc(money(e.low)) + '</b></div><div><span>High estimate</span><b>' + esc(money(e.high)) + '</b></div></div>') + '</div>' +
+          (e.low == null ? '<p>' + esc(e.reason) + '</p>' : '') + '<h4>How it is calculated</h4><dl class="htr-rr-calc-breakdown">' +
+          row('Roof area entered', Number(e.area_sqft).toLocaleString('en-US') + ' sq ft') + row('Extra area allowance', j.waste + '%') +
+          row('Area used for pricing', Number(e.billed_sqft).toLocaleString('en-US') + ' sq ft') + row('Base rate', money(e.rate_low) + ' – ' + money(e.rate_high) + ' / sq ft') +
+          row('Pitch adjustment', '× ' + e.pitch_mult) + row('Roof complexity (' + e.complexity + ')', '× ' + e.complexity_mult) + row('Regional adjustment', '× ' + e.region_mult) + '</dl><p class="htr-rr-sub">Area × rate × pitch × complexity × region. Rounded to the nearest $25.</p>';
+        result.hidden = false;
+    }
+    lead.addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      if (!inputs.reportValidity() || !lead.reportValidity()) return;
+      if (!state.lat || !state.lng || !state.address) { show('#htr-rr-err1', 'Please select your full address from the suggestions.'); return; }
+      var payload = data(), fields = lead.elements, btn = $('[data-calc-send]'), status = $('[data-calc-status]');
+      ['first_name', 'last_name', 'email', 'phone', 'website'].forEach(function (key) { payload[key] = fields[key].value.trim(); });
+      payload.sms_service = fields.sms_service.checked; payload.sms_marketing = fields.sms_marketing.checked;
+      payload.interests = $$('input[name="interests"]:checked', lead).map(function (el) { return el.value; });
+      payload.address = state.address; payload.city = state.city; payload.zip = state.zip; payload.source_url = location.href;
+      btn.disabled = true; status.textContent = 'Saving your request…';
+      Array.prototype.forEach.call(inputs.elements, function (el) { el.disabled = true; });
+      try {
+        var out = await api('calculator_lead', payload), j = out.json;
+        if (!out.ok || !j.ok) throw new Error(j.message || 'Could not save your request. Please try again.');
+        submitted = true;
+        renderEstimate(j);
+        status.textContent = 'Your request has been saved. Our team will confirm your roof measurements and estimate.';
+        $('[data-calc-contact]').hidden = true;
+        result.insertAdjacentHTML('beforeend', '<p class="htr-rr-sub">Your request has been saved. Our team will follow up to confirm your estimate.</p>');
+        Array.prototype.forEach.call(lead.elements, function (el) { el.disabled = true; });
+      } catch (err) { status.textContent = err.message; btn.disabled = false; Array.prototype.forEach.call(inputs.elements, function (el) { el.disabled = false; }); }
+    });
+  }
+
+  if (redirect) {
+    $('[data-address-submit]').addEventListener('click', function () {
+      if (!selectedPlaceId) {
+        show('#htr-rr-err1', 'Please select your full address from the suggestions first.');
+        var search = $('[data-address-search] gmp-place-autocomplete');
+        if (search) search.focus();
+        return;
+      }
+      var target = new URL(redirect, window.location.href);
+      target.searchParams.set('htr_place', selectedPlaceId);
+      window.location.assign(target.href);
+    });
+    initSearch();
+    return;
+  }
+
   $('#htr-rr-edit').addEventListener('click', function () {
     focusCard(1); var ac = document.getElementById('htr-rr-ac'); if (ac && ac.focus) ac.focus();
   });
@@ -286,4 +390,5 @@
   }
 
   initSearch();
+  });
 })();

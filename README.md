@@ -163,3 +163,28 @@ docs/                        Change explanations
 ```
 
 See [Settings page redesign](docs/settings-page-redesign.md) for the current branch's UI changes and validation notes.
+# Standalone address search
+
+Place this shortcode on a landing page, replacing the example URL with your actual request page:
+
+```text
+[htr_roof_report_search redirect="/instant-roof-report/"]
+```
+
+The destination page must contain `[htr_roof_report]`. After the visitor selects a full street address from Google suggestions and clicks Get My Roof Report, the search redirects to the request page. The report page retrieves the selected Google Place and opens property confirmation with the map and roof preview. No report or lead is submitted until the visitor completes the existing report form. Without a selected address, the regular report form starts as usual.
+
+This uses the existing Google browser key and Places API configuration. The redirect must be a local site URL. Search widgets can appear more than once on a page. JavaScript is required. Verify Google autocomplete and the destination map on the live WordPress site after deployment.
+
+## Public roof calculator
+
+```text
+[htr_roof_calculator]
+```
+
+Uses the backend Calculator design: roof details on the left and an address/contact form in the right preview panel. No prices appear until the visitor submits valid contact information and a selected address. The saved lead response reveals the price range, low/high estimates and breakdown in the right panel. There is no anonymous calculator preview endpoint. Inputs are locked after success to keep the displayed estimate consistent with the saved request; refresh to start another request. Calculations use the existing server-side estimator and saved Pricing settings. Enter whole-number dimensions: area 100–100,000 sq ft, pitch 0–24 and faces 1–100. Roof types without automatic pricing show an on-site quote message.
+
+The combined contact section uses Google address suggestions and the existing first/last name, email, US phone, interests and optional SMS preferences. Selecting an address makes its nearest service area authoritative for both preview and submitted pricing. Submit requests use the existing report validation, honeypot, visitor limits, report storage and n8n → GHL delivery/retry flow. The Google browser key and n8n credentials still come from Settings; this does not embed a GHL iframe.
+
+Calculator dimensions are customer-entered, not Google Solar measurements. Reports are always marked for review, identify their manual source, and do not render measured roof diagrams. Submitted prices are ignored; the server recalculates using current saved settings. The original report and standalone search shortcodes remain available.
+
+Validation: `php tests/calculator-test.php` runs isolated pricing, invalid-input, lead-pipeline, consent and original Solar-path checks without external calls. Verify Google suggestions, responsive appearance and real n8n/GHL delivery separately on the target site.

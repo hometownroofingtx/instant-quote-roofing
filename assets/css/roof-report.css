@@ -1,4 +1,45 @@
 /* Hometown Instant Roof Report - front end. Brand: navy #0b2d4f, red #d6202b. */
+.htr-rr-calculator .htr-rr-calc-layout { display:grid; grid-template-columns:minmax(0, .8fr) minmax(0, 1.3fr); gap:16px; align-items:start; }
+.htr-rr-calculator .htr-rr-card { padding:18px; border-color:#dbe3ef; border-radius:12px; }
+.htr-rr-calculator .htr-rr-card h3 { font-size:18px; font-weight:500; color:#123d60; }
+.htr-rr-calculator .htr-rr-sub { font-size:12px; color:#617b92; }
+.htr-rr-calculator .htr-rr-btn { background:#4053ed; border-radius:6px; font-size:13px; min-height:44px; padding:12px 16px; }
+.htr-rr-calculator .htr-rr-btn:hover { background:#3042d4; }
+.htr-rr-calculator .htr-rr-calc-actions { display:flex; align-items:center; gap:12px; padding-top:14px; margin-top:14px; border-top:1px solid #edf0f5; }
+.htr-rr-calculator .htr-rr-calc-bounds { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding-top:12px; margin-top:12px; border-top:1px solid #dbe7f3; }
+.htr-rr-calculator .htr-rr-calc-bounds span { display:block; margin-bottom:5px; color:#617b92; font-size:11px; }
+.htr-rr-calculator .htr-rr-calc-bounds b { font-size:16px; font-weight:500; }
+.htr-rr-calculator .htr-rr-calc-footer { margin:18px -18px -18px; padding:12px 18px; background:#fafbfc; border-top:1px solid #edf0f5; border-radius:0 0 12px 12px; color:#748292; font-size:11px; }
+.htr-rr-calculator label { display:block; margin:12px 0; color:#0b2d4f; font-size:14px; }
+.htr-rr-calculator input:not([type="checkbox"]), .htr-rr-calculator select { display:block; width:100%; min-height:44px; padding:10px; margin-top:5px; border:1px solid #c8d5e5; border-radius:6px; background:#fff; color:#0b2d4f; font:inherit; }
+.htr-rr-calculator input:focus-visible, .htr-rr-calculator select:focus-visible { outline:2px solid #0875a5; outline-offset:2px; }
+.htr-rr-calculator .htr-rr-calc-contact { margin-top:18px; }
+.htr-rr-calculator .htr-rr-calc-range { background:#f3f8ff; border:1px solid #d7e5fa; padding:18px; border-radius:10px; margin:16px 0; color:#0b2d4f; }
+.htr-rr-calculator .htr-rr-calc-range > span { font-size:12px; text-transform:uppercase; }
+.htr-rr-calculator .htr-rr-calc-range strong { display:block; font-size:clamp(24px, 3vw, 32px); margin-top:8px; }
+.htr-rr-calculator .htr-rr-calc-range p { margin:6px 0 0; font-size:13px; }
+.htr-rr-calculator .htr-rr-calc-breakdown { margin:12px 0; }
+.htr-rr-calculator .htr-rr-calc-breakdown > div { display:flex; justify-content:space-between; gap:16px; border-bottom:1px solid #e6edf6; padding:10px 0; font-size:13px; }
+.htr-rr-calculator .htr-rr-calc-breakdown dd { margin:0; text-align:right; }
+@media (max-width:760px) { .htr-rr-calculator .htr-rr-calc-layout { grid-template-columns:1fr; } }
+.htr-rr-standalone .htr-rr-address-bar { display:flex; align-items:center; gap:20px; padding:10px 10px 10px 26px; background:#fff; border:1px solid #dfe4ec; border-radius:20px; box-shadow:0 3px 12px rgba(11,45,79,.08); text-align:left; }
+.htr-rr-standalone .htr-rr-address-icon { display:block; flex:0 0 36px; width:36px; height:36px; color:#0875a5; fill:none; stroke:currentColor; stroke-width:2; }
+.htr-rr-standalone .htr-rr-address-field { flex:1; min-width:0; }
+.htr-rr-standalone .htr-rr-address-label { display:block; color:#0b2d4f; font-size:12px; line-height:1.4; font-weight:800; text-transform:uppercase; margin-bottom:3px; }
+.htr-rr-standalone gmp-place-autocomplete { color-scheme:light; border:0 !important; border-bottom:1px solid #dfe4ec !important; border-radius:0 !important; outline:none !important; box-shadow:none !important; background:transparent; color:#0b2d4f; font:inherit; width:100%; }
+.htr-rr-standalone gmp-place-autocomplete:focus,
+.htr-rr-standalone gmp-place-autocomplete:focus-visible,
+.htr-rr-standalone gmp-place-autocomplete:focus-within { border:0 !important; border-bottom:2px solid #0875a5 !important; outline:none !important; box-shadow:none !important; }
+.htr-rr-standalone gmp-place-autocomplete::part(focus-ring) { border:0 !important; outline:none !important; box-shadow:none !important; }
+.htr-rr-standalone .htr-rr-address-submit { display:flex; align-items:center; justify-content:center; gap:16px; flex:none; min-height:60px; padding:16px 24px; border:0; border-radius:12px; background:#ffc535; color:#0b2d4f; font:700 16px/1.3 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; cursor:pointer; }
+.htr-rr-standalone .htr-rr-address-submit:hover { background:#f5b91f; }
+.htr-rr-standalone .htr-rr-address-submit:focus-visible { outline:3px solid #0875a5; outline-offset:3px; }
+.htr-rr-standalone [data-address-error] { margin:8px 12px 0; }
+@media (max-width:600px) {
+  .htr-rr-standalone .htr-rr-address-bar { flex-wrap:wrap; gap:12px; padding:16px; border-radius:16px; }
+  .htr-rr-standalone .htr-rr-address-icon { flex-basis:28px; width:28px; height:28px; }
+  .htr-rr-standalone .htr-rr-address-submit { width:100%; min-height:52px; }
+}
 .htr-rr { --navy:#0b2d4f; --red:#d6202b; --ink:#1d2433; --mute:#5b6475; --line:#dfe4ec; --soft:#f4f7fb; --ok:#127a3a;
   color:var(--ink); font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; max-width:1200px; margin:0 auto; }
 .htr-rr *, .htr-rr *::before, .htr-rr *::after { box-sizing:border-box; }

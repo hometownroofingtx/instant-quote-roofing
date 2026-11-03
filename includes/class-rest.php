@@ -16,7 +16,7 @@ class HTR_RR_REST {
 	 * Same handlers, same guards; body is JSON (php://input).
 	 */
 	public static function ajax_init() {
-		foreach ( array( 'htr_rr_report' => 'create', 'htr_rr_email' => 'email_copy', 'htr_rr_preview' => 'preview' ) as $action => $fn ) {
+		foreach ( array( 'htr_rr_report' => 'create', 'htr_rr_email' => 'email_copy', 'htr_rr_preview' => 'preview', 'htr_rr_calculator_lead' => 'calculator_lead' ) as $action => $fn ) {
 			$cb = function () use ( $fn ) {
 				$req = new WP_REST_Request( 'POST' );
 				$req->set_header( 'content-type', 'application/json' );
@@ -30,6 +30,9 @@ class HTR_RR_REST {
 	}
 
 	public static function routes() {
+		foreach ( array( 'calculator_lead' ) as $method ) {
+			register_rest_route( 'htr-rr/v1', '/' . $method, array( 'methods' => 'POST', 'callback' => array( __CLASS__, $method ), 'permission_callback' => '__return_true' ) );
+		}
 		register_rest_route(
 			'htr-rr/v1',
 			'/report',
@@ -59,11 +62,44 @@ class HTR_RR_REST {
 		return new WP_REST_Response( array( 'ok' => false, 'code' => $code, 'message' => $message ), $status );
 	}
 
-	public static function create( WP_REST_Request $req ) {
+	/** Validated manual dimensions; prices are always calculated on the server. */
+	public static function calculator_measurements( $p ) {
+		foreach ( array( 'area_sqft' => array( 100, 100000 ), 'pitch_x12' => array( 0, 24 ), 'faces' => array( 1, 100 ) ) as $field => $bounds ) {
+			if ( ! isset( $p[ $field ] ) || ! is_numeric( $p[ $field ] ) || ! is_finite( (float) $p[ $field ] ) || (float) $p[ $field ] < $bounds[0] || (float) $p[ $field ] > $bounds[1] || (float) $p[ $field ] !== (float) (int) $p[ $field ] ) {
+				return null;
+			}
+		}
+		return array( 'ok' => true, 'source' => 'customer_entered', 'area_sqft' => (int) $p['area_sqft'], 'pitch_x12' => (int) $p['pitch_x12'], 'faces' => (int) $p['faces'], 'squares' => round( $p['area_sqft'] / 100, 1 ), 'ground_sqft' => null, 'building_box' => null, 'faces_detail' => array(), 'imagery_quality' => '', 'imagery_date' => '' );
+	}
+
+	public static function calculate( WP_REST_Request $req ) {
+		$p = $req->get_json_params();
+		$m = is_array( $p ) ? self::calculator_measurements( $p ) : null;
+		if ( ! $m ) { return self::fail( 'invalid', 'Enter roof area (100–100,000 sq ft), pitch (0–24) and roof faces (1–100) as whole numbers.' ); }
+		$s = HTR_RR_Settings::all();
+		$town = isset( $p['town'] ) && is_scalar( $p['town'] ) ? (int) $p['town'] : -1;
+		if ( ! isset( $s['areas'][ $town ] ) || ! isset( $p['material'] ) || ! is_string( $p['material'] ) || ! isset( $s['materials'][ $p['material'] ] ) ) { return self::fail( 'invalid', 'Choose a roof type and service area.' ); }
+		$key = 'htr_rr_calc_' . substr( self::ip_hash(), 0, 20 );
+		$count = (int) get_transient( $key );
+		if ( $count >= 120 && ! current_user_can( 'manage_options' ) ) { return self::fail( 'rate_limited', 'Please try again in an hour.', 429 ); }
+		set_transient( $key, $count + 1, HOUR_IN_SECONDS );
+		$near = isset( $p['lat'], $p['lng'] ) && is_numeric( $p['lat'] ) && is_numeric( $p['lng'] ) && abs( (float) $p['lat'] ) <= 90 && abs( (float) $p['lng'] ) <= 180 ? HTR_RR_Estimator::nearest_area( (float) $p['lat'], (float) $p['lng'], $s['areas'] ) : null;
+		$region = $near ? $near['mult'] : $s['areas'][ $town ]['mult'];
+		$e = HTR_RR_Estimator::estimate( $m, $p['material'], $s, $region );
+		return new WP_REST_Response( array( 'ok' => true, 'estimate' => $e, 'town' => $near ? $near['town'] : $s['areas'][ $town ]['town'], 'waste' => (float) $s['waste_pct'] ) );
+	}
+
+	public static function calculator_lead( WP_REST_Request $req ) {
+		return self::create( $req, true );
+	}
+
+	public static function create( WP_REST_Request $req, $calculator = false ) {
 		$p = $req->get_json_params();
 		if ( ! is_array( $p ) ) {
 			return self::fail( 'bad_request', 'Please fill in the form and try again.' );
 		}
+		$manual = $calculator ? self::calculator_measurements( $p ) : null;
+		if ( $calculator && ! $manual ) { return self::fail( 'invalid', 'Check your roof area, pitch and number of roof faces.' ); }
 		// 1. Honeypot: real people never fill the hidden "website" field.
 		if ( ! empty( $p['website'] ) ) {
 			return self::fail( 'bad_request', 'Please try again.' );
@@ -164,7 +200,11 @@ class HTR_RR_REST {
 		if ( ! $inside ) {
 			$review[] = 'Outside the service area (' . ( $near ? $near['miles'] . ' mi from ' . $near['town'] : 'unknown' ) . ')';
 		}
-		{
+		if ( $calculator ) {
+			$m = $manual;
+			$review[] = 'Calculator estimate from customer-entered dimensions; confirm measurements on site.';
+			$e = HTR_RR_Estimator::estimate( $m, $mat, $s, $near ? $near['mult'] : 1.0 );
+		} else {
 			$m = HTR_RR_Solar::measure( $lat, $lng, $id );
 			if ( empty( $m['ok'] ) ) {
 				$review[] = isset( $m['message'] ) ? $m['message'] : 'No measurement';
@@ -209,7 +249,13 @@ class HTR_RR_REST {
 		HTR_RR_Leads::send( $id );
 
 		$r = HTR_RR_DB::get_report( $id );
-		return new WP_REST_Response( array( 'ok' => true, 'report' => HTR_RR_Report_Page::public_view( $r ) ), 200 );
+		$response = array( 'ok' => true, 'report' => HTR_RR_Report_Page::public_view( $r ) );
+		if ( $calculator ) {
+			$response['estimate'] = $e;
+			$response['town'] = $near ? $near['town'] : '';
+			$response['waste'] = (float) $s['waste_pct'];
+		}
+		return new WP_REST_Response( $response, 200 );
 	}
 
 	/**

@@ -28,6 +28,7 @@ class HTR_RR_Report_Page {
 			}
 		}
 		$measured = null !== $r['area_sqft'];
+		$manual = $m && isset( $m['source'] ) && 'customer_entered' === $m['source'];
 		$mats     = HTR_RR_Settings::get( 'materials' );
 		$label    = isset( $mats[ $r['material'] ]['label'] ) ? $mats[ $r['material'] ]['label'] : $r['material'];
 		return array(
@@ -38,6 +39,7 @@ class HTR_RR_Report_Page {
 			'lat'          => (float) $r['lat'],
 			'lng'          => (float) $r['lng'],
 			'measured'     => $measured,
+			'customerEntered' => $manual,
 			'outsideArea'  => null !== $r['town_miles'] && (float) $r['town_miles'] > (float) HTR_RR_Settings::get( 'service_radius_mi' ),
 			'serviceTowns' => implode( ', ', wp_list_pluck( HTR_RR_Settings::get( 'areas' ), 'town' ) ),
 			'needsReview'  => 'completed' !== $r['status'],
@@ -58,7 +60,7 @@ class HTR_RR_Report_Page {
 			'buildingBox'  => $m ? $m['building_box'] : null,
 			'town'         => $r['town'],
 			'phone'        => HTR_RR_Settings::get( 'company_phone' ),
-			'disclaimer'   => HTR_RR_Settings::get( 'disclaimer' ),
+			'disclaimer'   => $manual ? 'Preliminary estimate based on customer-entered dimensions, not aerial measurements. Final measurements and pricing require an on-site inspection.' : HTR_RR_Settings::get( 'disclaimer' ),
 			'createdAt'    => $r['created_at'],
 		);
 	}
