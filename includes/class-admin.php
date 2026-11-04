@@ -13,6 +13,9 @@ class HTR_RR_Admin {
 
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
+		add_filter( 'set-screen-option', array( __CLASS__, 'save_screen_option' ), 10, 3 );
+		add_filter( 'set_screen_option_htr_rr_reports_per_page', array( __CLASS__, 'save_screen_option' ), 10, 3 );
+		add_filter( 'set_screen_option_htr_rr_logs_per_page', array( __CLASS__, 'save_screen_option' ), 10, 3 );
 		add_action( 'admin_post_htr_rr_save', array( __CLASS__, 'save' ) );
 		add_action( 'admin_post_htr_rr_export_pricing', array( __CLASS__, 'export_pricing' ) );
 		add_action( 'admin_post_htr_rr_export_reports', array( __CLASS__, 'export_reports' ) );
@@ -25,11 +28,47 @@ class HTR_RR_Admin {
 	public static function menu() {
 		add_menu_page( 'Roof Reports', 'Roof Reports', self::CAP, 'htr-rr', array( __CLASS__, 'overview' ), 'dashicons-admin-home', 26 );
 		add_submenu_page( 'htr-rr', 'Overview', 'Overview', self::CAP, 'htr-rr', array( __CLASS__, 'overview' ) );
-		add_submenu_page( 'htr-rr', 'Reports', 'Reports', self::CAP, 'htr-rr-reports', array( __CLASS__, 'reports' ) );
+		$reports_hook = add_submenu_page( 'htr-rr', 'Reports', 'Reports', self::CAP, 'htr-rr-reports', array( __CLASS__, 'reports' ) );
+		add_action( 'load-' . $reports_hook, array( __CLASS__, 'reports_screen_options' ) );
 		add_submenu_page( 'htr-rr', 'Pricing', 'Pricing', self::CAP, 'htr-rr-pricing', array( __CLASS__, 'pricing' ) );
 		add_submenu_page( 'htr-rr', 'Calculator', 'Calculator', self::CAP, 'htr-rr-calc', array( __CLASS__, 'calculator' ) );
 		add_submenu_page( 'htr-rr', 'Settings', 'Settings', self::CAP, 'htr-rr-settings', array( __CLASS__, 'settings' ) );
-		add_submenu_page( 'htr-rr', 'Logs', 'Logs', self::CAP, 'htr-rr-logs', array( __CLASS__, 'logs' ) );
+		$logs_hook = add_submenu_page( 'htr-rr', 'Logs', 'Logs', self::CAP, 'htr-rr-logs', array( __CLASS__, 'logs' ) );
+		add_action( 'load-' . $logs_hook, array( __CLASS__, 'logs_screen_options' ) );
+	}
+
+	public static function reports_screen_options() {
+		if ( ! empty( $_GET['view'] ) ) { return; } // phpcs:ignore WordPress.Security.NonceVerification
+		add_screen_option( 'per_page', array( 'label' => 'Reports per page', 'default' => 20, 'option' => 'htr_rr_reports_per_page' ) );
+	}
+
+	public static function logs_screen_options() {
+		add_screen_option( 'per_page', array( 'label' => 'Log entries per page', 'default' => 20, 'option' => 'htr_rr_logs_per_page' ) );
+	}
+
+	public static function save_screen_option( $status, $option, $value ) {
+		if ( ! in_array( $option, array( 'htr_rr_reports_per_page', 'htr_rr_logs_per_page' ), true ) ) { return $status; }
+		return is_scalar( $value ) && is_numeric( $value ) ? min( 200, max( 1, (int) $value ) ) : 20;
+	}
+
+	/** Shared bounds for list queries, including stale links after records are removed. */
+	private static function page_state( $total, $option ) {
+		$saved = get_user_option( $option );
+		$per_page = false === $saved || '' === $saved ? 20 : self::save_screen_option( false, $option, $saved );
+		$pages = max( 1, (int) ceil( $total / $per_page ) );
+		$requested = isset( $_GET['paged'] ) && is_scalar( $_GET['paged'] ) ? (int) $_GET['paged'] : 1; // phpcs:ignore
+		$page = min( $pages, max( 1, $requested ) );
+		return array( 'total' => (int) $total, 'per_page' => $per_page, 'pages' => $pages, 'page' => $page, 'offset' => ( $page - 1 ) * $per_page );
+	}
+
+	private static function pagination( array $state, array $args ) {
+		echo '<div class="htr-pagination"><span>' . esc_html( number_format_i18n( $state['total'] ) . ' items' ) . '</span>';
+		if ( $state['pages'] > 1 ) {
+			$base = add_query_arg( array_merge( $args, array( 'paged' => '%#%' ) ), admin_url( 'admin.php' ) );
+			$base = str_replace( '%25%23%25', '%#%', $base );
+			echo '<nav aria-label="Pagination">' . wp_kses_post( paginate_links( array( 'base' => $base, 'format' => '', 'current' => $state['page'], 'total' => $state['pages'], 'prev_text' => 'Previous', 'next_text' => 'Next', 'mid_size' => 1, 'add_args' => false ) ) ) . '</nav>';
+		}
+		echo '</div>';
 	}
 
 	public static function assets( $hook ) {
@@ -70,8 +109,8 @@ class HTR_RR_Admin {
 	}
 
 	private static function status_pill( $s ) {
-		$map = array( 'completed' => 'ok', 'review' => 'warn', 'processing' => 'info', 'pending' => 'info', 'sent' => 'ok', 'failed' => 'bad' );
-		$labels = array( 'completed' => 'Completed', 'review' => 'Needs review', 'processing' => 'Processing', 'pending' => 'Pending', 'sent' => 'Sent', 'failed' => 'Delivery failed' );
+		$map = array( 'completed' => 'ok', 'review' => 'warn', 'processing' => 'info', 'pending' => 'info', 'awaiting_form' => 'warn', 'sent' => 'ok', 'failed' => 'bad' );
+		$labels = array( 'completed' => 'Completed', 'review' => 'Needs review', 'processing' => 'Processing', 'pending' => 'Pending', 'awaiting_form' => 'Waiting for GHL form', 'sent' => 'Sent', 'failed' => 'Delivery failed' );
 		return '<span class="htr-pill htr-pill--' . esc_attr( isset( $map[ $s ] ) ? $map[ $s ] : 'info' ) . ' htr-status--' . esc_attr( sanitize_key( $s ) ) . '">' . esc_html( $labels[ $s ] ?? ucfirst( $s ) ) . '</span>';
 	}
 
@@ -180,6 +219,9 @@ class HTR_RR_Admin {
 			);
 		}
 		$where = $conditions ? ' WHERE ' . implode( ' AND ', $conditions ) : '';
+		$table = HTR_RR_DB::reports();
+		$state = self::page_state( (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table" . $where ), 'htr_rr_reports_per_page' ); // phpcs:ignore
+		$page_args = array( 'page' => 'htr-rr-reports', 'status' => $status, 'source' => $source );
 		self::head( 'Reports' );
 		echo '<div class="htr-reports-toolbar">';
 		echo '<nav class="htr-status-filters" aria-label="Filter reports by status">';
@@ -193,10 +235,12 @@ class HTR_RR_Admin {
 			echo '<option value="' . esc_attr( $value ) . '"' . selected( $source, $value, false ) . '>' . esc_html( $label ) . '</option>';
 		}
 		echo '</select><button type="submit" class="button">Filter</button></form>';
-		echo '<div class="htr-reports-export"><a class="button" title="Exports all reports across every status, beyond the 200 displayed" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=htr_rr_export_reports' ), 'htr_rr_export_reports' ) ) . '"><span class="dashicons dashicons-download" aria-hidden="true"></span> Download overall report (CSV)</a></div>';
+		echo '<div class="htr-reports-export"><a class="button" title="Exports all reports across every source, status and page" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=htr_rr_export_reports' ), 'htr_rr_export_reports' ) ) . '"><span class="dashicons dashicons-download" aria-hidden="true"></span> Download overall report (CSV)</a></div>';
 		echo '</div>';
-		self::table( $wpdb->get_results( 'SELECT * FROM ' . HTR_RR_DB::reports() . $where . ' ORDER BY id DESC LIMIT 200', ARRAY_A ) ); // phpcs:ignore
-		echo '<p class="description">Newest 200 matching reports shown. The overall CSV includes all sources and statuses.</p></div>';
+		self::pagination( $state, $page_args );
+		self::table( $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table" . $where . ' ORDER BY id DESC LIMIT %d OFFSET %d', $state['per_page'], $state['offset'] ), ARRAY_A ) ); // phpcs:ignore
+		self::pagination( $state, $page_args );
+		echo '<p class="description">Set items per page in Screen Options (1–200). The overall CSV includes all sources and statuses.</p></div>';
 	}
 
 	private static function report_details( array $r ) {
@@ -399,6 +443,7 @@ class HTR_RR_Admin {
 		self::secret( 'n8n_secret', 'Shared signing secret', $s['n8n_secret'], 'Must match the secret in your n8n workflow. Leave blank to keep the saved value.' );
 		self::field( 'notify_email', 'Delivery alert email', $s['notify_email'], 'Receives an alert when lead delivery exhausts its retries.' );
 		self::field( 'ghl_form_id', 'GHL form ID', $s['ghl_form_id'], 'Identifies the originating form in the lead payload.' );
+		echo '<tr><th><label for="contact_mode">Contact step</label></th><td><select id="contact_mode" name="contact_mode"><option value="plugin"' . selected( $s['contact_mode'], 'plugin', false ) . '>Plugin form (leads sent to GHL through n8n)</option><option value="ghl_form"' . selected( $s['contact_mode'], 'ghl_form', false ) . '>GHL form (the form ID above, embedded)</option></select><p class="description">GHL form: the customer fills in the GHL form itself, so every lead is a real form submission in GHL. The roof report is saved first and linked when the form is submitted. Switch back to Plugin form at any time.</p></td></tr>';
 		echo '</tbody></table></section>';
 		self::settings_card( 'Customer information', 'Contact details and estimate wording shown to homeowners.', 'admin-users' );
 		self::field( 'company_phone', 'Company phone number', $s['company_phone'], 'Displayed on customer reports and the roof report form.' );
@@ -431,8 +476,12 @@ class HTR_RR_Admin {
 	/* ---------------- Logs ---------------- */
 	public static function logs() {
 		global $wpdb;
-		self::head( 'Logs', 'Review API activity, measurement results and lead delivery errors. Showing the latest 300 entries.' );
-		self::log_table( $wpdb->get_results( 'SELECT * FROM ' . HTR_RR_DB::log_table() . ' ORDER BY id DESC LIMIT 300', ARRAY_A ) ); // phpcs:ignore
+		self::head( 'Logs', 'Review API activity, measurement results and lead delivery errors. Set items per page in Screen Options (1–200).' );
+		$table = HTR_RR_DB::log_table();
+		$state = self::page_state( (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table" ), 'htr_rr_logs_per_page' ); // phpcs:ignore
+		self::pagination( $state, array( 'page' => 'htr-rr-logs' ) );
+		self::log_table( $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table ORDER BY id DESC LIMIT %d OFFSET %d", $state['per_page'], $state['offset'] ), ARRAY_A ) ); // phpcs:ignore
+		self::pagination( $state, array( 'page' => 'htr-rr-logs' ) );
 		echo '</div>';
 	}
 
@@ -611,6 +660,7 @@ class HTR_RR_Admin {
 				$bad[] = 'n8n shared secret (that looks like a Google key)';
 			}
 			$new['required_quality'] = isset( $_POST['required_quality'] ) && 'HIGH' === $_POST['required_quality'] ? 'HIGH' : 'MEDIUM'; // phpcs:ignore
+			$new['contact_mode']     = isset( $_POST['contact_mode'] ) && 'ghl_form' === $_POST['contact_mode'] ? 'ghl_form' : 'plugin'; // phpcs:ignore
 			$new['disclaimer']       = sanitize_textarea_field( isset( $_POST['disclaimer'] ) ? wp_unslash( $_POST['disclaimer'] ) : '' ); // phpcs:ignore
 			$new['rate_limit_hour']  = min( 50, max( 1, (int) ( isset( $_POST['rate_limit_hour'] ) ? $_POST['rate_limit_hour'] : 5 ) ) ); // phpcs:ignore
 			$page                    = 'htr-rr-settings';
@@ -627,6 +677,10 @@ class HTR_RR_Admin {
 			wp_die( 'Not allowed' );
 		}
 		check_admin_referer( 'htr_rr_resend_' . $id );
+		$report = HTR_RR_DB::get_report( $id );
+		if ( ! $report || 'awaiting_form' === $report['lead_status'] ) {
+			wp_die( 'This report cannot be resent until its GHL contact form is linked.', 'Waiting for contact', array( 'back_link' => true, 'response' => 400 ) );
+		}
 		HTR_RR_DB::update_report( $id, array( 'lead_status' => 'pending', 'lead_tries' => 0 ) );
 		$ok = HTR_RR_Leads::send( $id );
 		wp_safe_redirect( admin_url( 'admin.php?page=htr-rr-reports&view=' . $id . '&msg=' . rawurlencode( $ok ? 'Lead delivered to n8n.' : 'Delivery failed - see the log below. It will retry every 15 minutes.' ) ) );

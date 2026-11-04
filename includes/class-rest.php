@@ -16,7 +16,7 @@ class HTR_RR_REST {
 	 * Same handlers, same guards; body is JSON (php://input).
 	 */
 	public static function ajax_init() {
-		foreach ( array( 'htr_rr_report' => 'create', 'htr_rr_email' => 'email_copy', 'htr_rr_preview' => 'preview', 'htr_rr_calculator_lead' => 'calculator_lead' ) as $action => $fn ) {
+		foreach ( array( 'htr_rr_report' => 'create', 'htr_rr_email' => 'email_copy', 'htr_rr_preview' => 'preview', 'htr_rr_calculator_lead' => 'calculator_lead', 'htr_rr_prepare' => 'prepare', 'htr_rr_calculator_prepare' => 'calculator_prepare', 'htr_rr_status' => 'status', 'htr_rr_link_contact' => 'link_contact' ) as $action => $fn ) {
 			$cb = function () use ( $fn ) {
 				$req = new WP_REST_Request( 'POST' );
 				$req->set_header( 'content-type', 'application/json' );
@@ -30,7 +30,7 @@ class HTR_RR_REST {
 	}
 
 	public static function routes() {
-		foreach ( array( 'calculator_lead' ) as $method ) {
+		foreach ( array( 'calculator_lead', 'prepare', 'calculator_prepare', 'status', 'link_contact' ) as $method ) {
 			register_rest_route( 'htr-rr/v1', '/' . $method, array( 'methods' => 'POST', 'callback' => array( __CLASS__, $method ), 'permission_callback' => '__return_true' ) );
 		}
 		register_rest_route(
@@ -93,7 +93,88 @@ class HTR_RR_REST {
 		return self::create( $req, true );
 	}
 
-	public static function create( WP_REST_Request $req, $calculator = false ) {
+	/**
+	 * GHL form mode (1.1.0): steps 1-3 save and price the report WITHOUT contact details and without sending a lead.
+	 * The customer then submits the GHL form (hidden field htr_report_id); n8n calls link_contact() and the lead goes out
+	 * through the normal path. Reports stay 'awaiting_form' until then (never retried by WP-Cron).
+	 */
+	public static function prepare( WP_REST_Request $req ) {
+		return self::create( $req, false, true );
+	}
+
+	public static function calculator_prepare( WP_REST_Request $req ) {
+		return self::create( $req, true, true );
+	}
+
+	/** Public: has the GHL form for this report been submitted and linked yet? (the page polls this). */
+	public static function status( WP_REST_Request $req ) {
+		$p = $req->get_json_params();
+		$token = is_array( $p ) && is_string( $p['token'] ?? null ) ? $p['token'] : '';
+		$r = $token ? HTR_RR_DB::get_by_token( $token ) : null;
+		if ( ! $r ) {
+			return self::fail( 'not_found', 'Report not found.', 404 );
+		}
+		$linked = 'awaiting_form' !== $r['lead_status'];
+		$response = array( 'ok' => true, 'linked' => $linked );
+		if ( $linked ) { $response['report'] = HTR_RR_Report_Page::public_view( $r ); }
+		return new WP_REST_Response( $response, 200 );
+	}
+
+	/**
+	 * Called by n8n when a GHL form submission carries htr_report_id. Protected by the shared secret (header X-HTR-Key,
+	 * same secret as lead delivery). Saves the customer's details on the report and sends the lead (tags, fields, email).
+	 */
+	public static function link_contact( WP_REST_Request $req ) {
+		$key = (string) $req->get_header( 'x_htr_key' );
+		if ( '' === $key && isset( $_SERVER['HTTP_X_HTR_KEY'] ) ) {
+			$key = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_HTR_KEY'] ) );
+		}
+		$sec = (string) HTR_RR_Settings::get( 'n8n_secret' );
+		if ( '' === $sec || '' === $key || ! hash_equals( $sec, $key ) ) {
+			return self::fail( 'forbidden', 'Not allowed.', 403 );
+		}
+		$p  = $req->get_json_params();
+		$id = is_array( $p ) && isset( $p['report_id'] ) ? (int) $p['report_id'] : 0;
+		$r  = $id ? HTR_RR_DB::get_report( $id ) : null;
+		if ( ! $r ) {
+			return self::fail( 'not_found', 'Report ' . $id . ' not found.', 404 );
+		}
+		if ( 'awaiting_form' !== $r['lead_status'] ) {
+			return new WP_REST_Response( array( 'ok' => true, 'already_linked' => true, 'lead_status' => $r['lead_status'] ), 200 );
+		}
+		$first = sanitize_text_field( isset( $p['first_name'] ) ? $p['first_name'] : '' );
+		$last  = sanitize_text_field( isset( $p['last_name'] ) ? $p['last_name'] : '' );
+		$email = sanitize_email( isset( $p['email'] ) ? $p['email'] : '' );
+		$digits = preg_replace( '/[^0-9]/', '', isset( $p['phone'] ) ? (string) $p['phone'] : '' );
+		if ( strlen( $digits ) === 11 && '1' === $digits[0] ) {
+			$digits = substr( $digits, 1 );
+		}
+		$phone = strlen( $digits ) === 10 ? '+1' . $digits : '';
+		if ( ( '' === $first && '' === $last ) || ( ! is_email( $email ) && '' === $phone ) ) {
+			return self::fail( 'invalid', 'The form submission has no name or no email/phone.' );
+		}
+		HTR_RR_DB::update_report(
+			$id,
+			array(
+				'first_name'  => $first,
+				'last_name'   => $last,
+				'email'       => is_email( $email ) ? $email : '',
+				'phone'       => $phone,
+				'sms_consent' => implode( ',', array_filter( array( ! empty( $p['sms_service'] ) ? 'service' : '', ! empty( $p['sms_marketing'] ) ? 'marketing' : '' ) ) ),
+				'lead_status' => 'pending',
+				'lead_tries'  => 0,
+				'lead_error'  => '',
+			)
+		);
+		HTR_RR_DB::log( 'info', 'lead', 'GHL form submission linked' . ( ! empty( $p['submission_id'] ) ? ' (' . sanitize_text_field( (string) $p['submission_id'] ) . ')' : '' ), $id );
+		$sent = HTR_RR_Leads::send( $id );
+		return new WP_REST_Response( array( 'ok' => true, 'linked' => true, 'delivered' => (bool) $sent ), 200 );
+	}
+
+	public static function create( WP_REST_Request $req, $calculator = false, $deferred = false ) {
+		if ( $deferred && 'ghl_form' !== HTR_RR_Settings::public_config()['contactMode'] ) {
+			return self::fail( 'disabled', 'The GHL contact step is not enabled.', 403 );
+		}
 		$p = $req->get_json_params();
 		if ( ! is_array( $p ) ) {
 			return self::fail( 'bad_request', 'Please fill in the form and try again.' );
@@ -128,18 +209,22 @@ class HTR_RR_REST {
 		$allow = array( 'replacement', 'repair', 'storm', 'inspection' );
 		$ints  = array_values( array_intersect( $allow, array_map( 'sanitize_key', isset( $p['interests'] ) && is_array( $p['interests'] ) ? $p['interests'] : array() ) ) );
 		$err   = array();
-		if ( '' === $first || '' === $last ) {
-			$err[] = 'your first and last name';
-		}
-		if ( ! is_email( $email ) ) {
-			$err[] = 'a valid email';
-		}
-		$digits = preg_replace( '/[^0-9]/', '', $phone );
-		if ( strlen( $digits ) === 11 && '1' === $digits[0] ) {
-			$digits = substr( $digits, 1 );
-		}
-		if ( strlen( $digits ) !== 10 ) {
-			$err[] = 'a 10-digit US phone number';
+		$digits = '';
+		// GHL form mode: contact details come later from the GHL form submission (link_contact).
+		if ( ! $deferred ) {
+			if ( '' === $first || '' === $last ) {
+				$err[] = 'your first and last name';
+			}
+			if ( ! is_email( $email ) ) {
+				$err[] = 'a valid email';
+			}
+			$digits = preg_replace( '/[^0-9]/', '', $phone );
+			if ( strlen( $digits ) === 11 && '1' === $digits[0] ) {
+				$digits = substr( $digits, 1 );
+			}
+			if ( strlen( $digits ) !== 10 ) {
+				$err[] = 'a 10-digit US phone number';
+			}
 		}
 		if ( '' === $addr || ! $lat || ! $lng || abs( $lat ) > 90 || abs( $lng ) > 180 ) {
 			$err[] = 'your property address (pick it from the list)';
@@ -153,7 +238,12 @@ class HTR_RR_REST {
 		if ( $err ) {
 			return self::fail( 'invalid', 'Please add ' . implode( ', ', $err ) . '.' );
 		}
-		$phone = '+1' . $digits;
+		$phone = $deferred ? '' : '+1' . $digits;
+		if ( $deferred ) {
+			$first = '';
+			$last  = '';
+			$email = '';
+		}
 		// 4. Service area.
 		$near   = HTR_RR_Estimator::nearest_area( $lat, $lng, $s['areas'] );
 		$inside = $near && $near['miles'] <= (float) $s['service_radius_mi'];
@@ -184,6 +274,7 @@ class HTR_RR_REST {
 				'town_miles' => $near ? $near['miles'] : null,
 				'source_url' => esc_url_raw( isset( $p['source_url'] ) ? substr( (string) $p['source_url'], 0, 250 ) : '' ),
 				'ip_hash'    => $ip,
+				'lead_status' => $deferred ? 'awaiting_form' : 'pending',
 			)
 		);
 		$id = (int) $wpdb->insert_id;
@@ -247,7 +338,9 @@ class HTR_RR_REST {
 			)
 		);
 		// 6. Lead to GHL (through n8n). Failure here never blocks the customer; WP-Cron retries.
-		HTR_RR_Leads::send( $id );
+		if ( ! $deferred ) {
+			HTR_RR_Leads::send( $id );
+		}
 
 		$r = HTR_RR_DB::get_report( $id );
 		$response = array( 'ok' => true, 'report' => HTR_RR_Report_Page::public_view( $r ) );
@@ -255,6 +348,12 @@ class HTR_RR_REST {
 			$response['estimate'] = $e;
 			$response['town'] = $near ? $near['town'] : '';
 			$response['waste'] = (float) $s['waste_pct'];
+		}
+		if ( $deferred ) {
+			// Values the page pre-fills into the GHL form (hidden fields + roof type).
+			$response['report_id'] = $id;
+			$response['lead_type'] = $calculator ? 'Calculator' : 'Instant quote';
+			$response['roof_type'] = isset( $s['materials'][ $mat ]['label'] ) ? $s['materials'][ $mat ]['label'] : $mat;
 		}
 		return new WP_REST_Response( $response, 200 );
 	}

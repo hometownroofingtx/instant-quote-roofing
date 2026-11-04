@@ -31,6 +31,11 @@ class HTR_RR_Settings {
 			'consent_service'    => 'By checking this box, I consent to receive non-marketing text messages from Hometown Roofing & Restoration about my roof report, inspection and appointments. Message frequency varies, message & data rates may apply. Text HELP for assistance, reply STOP to opt out.',
 			'consent_marketing'  => 'By checking this box, I consent to receive marketing and promotional messages including special offers, discounts, new product updates among others, from Hometown Roofing & Restoration at the phone number provided. Frequency may vary. Message & data rates may apply. Text HELP for assistance, reply STOP to opt out.',
 			'ghl_form_id'        => '9uN85m16cN7dG9QBrsM0', // sent to n8n so GHL records which form the lead belongs to.
+			// Contact step: 'plugin' = the plugin's own contact form (leads reach GHL through n8n); 'ghl_form' = the GHL form above is
+			// embedded at the contact step, so every lead is a real GHL form submission (1.1.0, Mark 4 Nov 2026).
+			'contact_mode'       => 'plugin',
+			// Query key of the form's "Type of Roof Do You Have?" field (Form 30), pre-filled with the roof type the customer picked.
+			'ghl_roof_type_key'  => 'single_line_60fgq',
 			// Limits.
 			'rate_limit_hour'    => 5,
 			'service_radius_mi'  => 60,
@@ -225,6 +230,11 @@ class HTR_RR_Settings {
 			'phone'      => $s['company_phone'],
 			'disclaimer' => $s['disclaimer'],
 			'materials'  => $mat,
+			// GHL form at the contact step (only when a form ID is set).
+			'contactMode'    => ( 'ghl_form' === $s['contact_mode'] && '' !== trim( (string) $s['ghl_form_id'] ) ) ? 'ghl_form' : 'plugin',
+			'ghlFormId'      => trim( (string) $s['ghl_form_id'] ),
+			'ghlFormBase'    => 'https://api.leadconnectorhq.com/widget/form/',
+			'ghlRoofTypeKey' => (string) $s['ghl_roof_type_key'],
 		);
 	}
 }

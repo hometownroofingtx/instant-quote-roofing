@@ -2,7 +2,11 @@
 
 A WordPress plugin for collecting roof-report requests, measuring roofs through Google Solar, calculating estimated price ranges, and sending leads to GoHighLevel through n8n.
 
-**Version:** 1.0.8
+**Version:** 1.1.0
+
+This release combines the GHL contact step with source tags/filters, the dedicated Source column, the map-only calculator, report downloads, pricing import/export, and per-user Reports/Logs pagination. It retains schema version 4 from the source-tagging update; installing it preserves saved options and report data. Deploy this combined `v1.1.0` release rather than the older ZIP based on `b03db98`.
+
+**1.1.0 (4 Nov 2026):** optional *Contact step = GHL form*. Settings → Lead delivery → Contact step. When set, steps 1–3 save and price the report, then the GHL form (GHL form ID, Form 30) is embedded with hidden fields `htr_report_id` and `htr_lead_type` plus the address and roof type pre-filled. Every lead is a real GHL form submission. n8n links the submission to the report (`htr_rr_link_contact`, header `X-HTR-Key` = shared secret) and the lead is sent as before. Reports wait in status *Waiting for GHL form* until linked. Default stays *Plugin form*.
 
 **Requires:** WordPress 6.0+ and PHP 7.4+
 
@@ -101,7 +105,7 @@ The calculator also displays **Download report (PDF)** after the customer succes
 
 Administrators can select **Download report** beside **View** in the Reports table or from the report detail page's action bar. The Overview's recent reports use the same table action. Each opens the matching customer report's print dialog; choose **Save as PDF** to download it.
 
-Use **Download overall report (CSV)** above the Reports table to export all reports across every status, including records beyond the newest 200 displayed. This administrator-only, nonce-protected spreadsheet contains customer/contact details, property information, measurements, estimate ranges, and lead delivery status. It excludes report access tokens, integration secrets, and raw measurement payloads. Rows are read in batches, and spreadsheet formula prefixes in customer-entered values are escaped. The current table status filter does not restrict the overall export.
+Use **Download overall report (CSV)** above the Reports table to export all reports across every status, including records on every page. This administrator-only, nonce-protected spreadsheet contains customer/contact details, property information, measurements, estimate ranges, and lead delivery status. It excludes report access tokens, integration secrets, and raw measurement payloads. Rows are read in batches, and spreadsheet formula prefixes in customer-entered values are escaped. The current table status filter does not restrict the overall export.
 
 ## Admin pages
 
@@ -214,8 +218,12 @@ This uses the existing Google browser key and Places API configuration. The redi
 
 Uses the backend Calculator design: roof details on the left and an address/contact form in the right preview panel. No prices appear until the visitor submits valid contact information and a selected address. The saved lead response reveals the price range, low/high estimates and breakdown in the right panel. There is no anonymous calculator preview endpoint. Inputs are locked after success to keep the displayed estimate consistent with the saved request; refresh to start another request. Calculations use the existing server-side estimator and saved Pricing settings. Enter whole-number dimensions: area 100–100,000 sq ft, pitch 0–24 and faces 1–100. Roof types without automatic pricing show an on-site quote message.
 
-The combined contact section uses Google address suggestions and the existing first/last name, email, US phone, interests and optional SMS preferences. Selecting an address makes its nearest service area authoritative for both preview and submitted pricing. Submit requests use the existing report validation, honeypot, visitor limits, report storage and n8n → GHL delivery/retry flow. The Google browser key and n8n credentials still come from Settings; this does not embed a GHL iframe.
+In the default Plugin form mode, the contact section uses Google address suggestions and the existing first/last name, email, US phone, interests and optional SMS preferences. Selecting an address makes its nearest service area authoritative for submitted pricing. Submit requests use the existing report validation, honeypot, visitor limits, report storage and n8n → GHL delivery/retry flow. In GHL form mode, the selected GHL form is embedded instead; n8n links the contact before the page displays the result. Google and n8n credentials still come from Settings.
 
 Calculator dimensions are customer-entered, not Google Solar measurements. Reports are always marked for review, identify their manual source, and do not render measured roof diagrams. Submitted prices are ignored; the server recalculates using current saved settings. The original report and standalone search shortcodes remain available.
 
 Validation: `php tests/calculator-test.php` runs isolated pricing, invalid-input, lead-pipeline, consent and original Solar-path checks without external calls. Verify Google suggestions, responsive appearance and real n8n/GHL delivery separately on the target site.
+
+## Admin pagination
+
+Reports and Logs have independent pagination, with 20 items per page by default. Open WordPress **Screen Options** on either list to save your preferred count (1-200) for your own account. Reports retain source and status filters across pages; changing a filter starts on page 1. The overall CSV still exports all reports. Overview recent reports and an individual report's activity history keep their existing behavior.

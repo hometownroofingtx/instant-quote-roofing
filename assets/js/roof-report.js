@@ -164,6 +164,74 @@
       note.classList.toggle('htr-rr-error', j.areaSqft < 400 || !j.markerOnRoof);
     } catch (e) { if (seq === pvSeq) { facts.innerHTML = ''; note.textContent = 'Preview not available right now. You can still continue.'; } }
   }
+
+  /* ---------- GHL form at the contact step (1.1.0) ----------
+   * The report is saved and priced first (prepare), then the GHL form is shown with the report number and roof type
+   * pre-filled. Polling confirms that n8n linked the submission. A GHL form message triggers an earlier status check;
+   * only server-confirmed linking reveals the report. */
+  var ghlMode = C.contactMode === 'ghl_form' && !!C.ghlFormId;
+  function embedGhlForm(box, prep, onDone) {
+    var q = new URLSearchParams();
+    q.set('htr_report_id', String(prep.report_id));
+    q.set('htr_lead_type', prep.lead_type || '');
+    if (prep.roof_type && C.ghlRoofTypeKey) q.set(C.ghlRoofTypeKey, prep.roof_type);
+    var street = String(state.address || '').split(',')[0];
+    if (street) q.set('address', street);
+    if (state.city) q.set('city', state.city);
+    q.set('state', 'TX');
+    if (state.zip) q.set('postal_code', state.zip);
+    var fid = C.ghlFormId, id = 'inline-' + fid;
+    box.innerHTML = '<iframe src="' + esc(C.ghlFormBase + encodeURIComponent(fid) + '?' + q.toString()) + '" style="width:100%;height:100%;min-height:780px;border:none;border-radius:8px" id="' + esc(id) + '"' +
+      ' data-layout="{\'id\':\'INLINE\'}" data-trigger-type="alwaysShow" data-trigger-value="" data-activation-type="alwaysActivated" data-activation-value=""' +
+      ' data-deactivation-type="neverDeactivate" data-deactivation-value="" data-form-name="Roof report contact" data-height="780" data-layout-iframe-id="' + esc(id) + '"' +
+      ' data-form-id="' + esc(fid) + '" title="Your contact information"></iframe>' +
+      '<p class="htr-rr-note" data-ghl-note>Your report appears here as soon as you submit the form.</p>';
+    box.hidden = false;
+    if (!document.querySelector('script[data-htr-ghl-embed]')) {
+      var s = document.createElement('script'); s.src = 'https://link.msgsndr.com/js/form_embed.js'; s.async = true; s.setAttribute('data-htr-ghl-embed', '1'); document.body.appendChild(s);
+    }
+    var finished = false, polls = 0, timer = null;
+    function finish(why) {
+      if (finished) return; finished = true; prep._done = true;
+      clearInterval(timer); window.removeEventListener('message', onMsg);
+      if (window.console) console.log('HTR-RR: GHL form done (' + why + ')');
+      onDone(prep);
+    }
+    var checking = false;
+    async function checkLinked() {
+      if (finished || checking) return;
+      checking = true;
+      try {
+        var j = (await api('status', { token: prep.report.token })).json || {};
+        if (j.ok && j.linked) {
+          if (j.report) prep.report = j.report;
+          finish('linked');
+        }
+      } catch (e) { /* transient failures are retried by the poll */ }
+      finally { checking = false; }
+    }
+    function onMsg(ev) {
+      var frame = box.querySelector('iframe');
+      if (!frame || ev.source !== frame.contentWindow) return;
+      var expectedOrigin;
+      try { expectedOrigin = new URL(frame.src).origin; } catch (e) { return; }
+      if (ev.origin !== expectedOrigin) return;
+      var text;
+      try { text = typeof ev.data === 'string' ? ev.data : JSON.stringify(ev.data); } catch (e) { return; }
+      if (/form[-_ ]?submit(ted)?|submission|thank[-_ ]?you/i.test(text)) checkLinked();
+    }
+    window.addEventListener('message', onMsg);
+    // Server-confirmed linking is authoritative; an iframe message only triggers a check.
+    timer = setInterval(function () {
+      if (++polls > 450) {
+        clearInterval(timer); window.removeEventListener('message', onMsg);
+        var note = box.querySelector('[data-ghl-note]');
+        if (note) note.textContent = 'Still waiting for your form to link. Please contact our team with report #' + prep.report_id + ' if you already submitted.';
+        return;
+      }
+      checkLinked();
+    }, 4000);
+  }
   if (calculator) { initCalculator(); initSearch(); return; }
 
   function initCalculator() {
@@ -182,7 +250,8 @@
       if (!inputs.reportValidity()) return;
       var search = $('[data-address-search] gmp-place-autocomplete');
       if (!state.address && search) search.focus();
-      else lead.elements.first_name.focus();
+      else if (lead) lead.elements.first_name.focus();
+      else if (cont) cont.focus();
     });
     function renderEstimate(j) {
         var e = j.estimate;
@@ -194,7 +263,30 @@
           row('Pitch adjustment', '× ' + e.pitch_mult) + row('Roof complexity (' + e.complexity + ')', '× ' + e.complexity_mult) + row('Regional adjustment', '× ' + e.region_mult) + '</dl><p class="htr-rr-sub">Area × rate × pitch × complexity × region. Rounded to the nearest $25.</p>';
         result.hidden = false;
     }
-    lead.addEventListener('submit', async function (ev) {
+    var cont = $('[data-calc-continue]');
+    if (ghlMode && cont) {
+      cont.addEventListener('click', async function () {
+        if (!inputs.reportValidity()) return;
+        if (!state.lat || !state.lng || !state.address) { show('#htr-rr-err1', 'Please select your full address from the suggestions.'); var s = $('[data-address-search] gmp-place-autocomplete'); if (s) s.focus(); return; }
+        var payload = data(), status = $('[data-calc-status]');
+        payload.address = state.address; payload.city = state.city; payload.zip = state.zip; payload.source_url = location.href; payload.website = '';
+        cont.disabled = true; status.textContent = 'Preparing your estimate…';
+        state.mapLocked = true;
+        $('[data-address-search]').setAttribute('inert', '');
+        Array.prototype.forEach.call(inputs.elements, function (el) { el.disabled = true; });
+        try {
+          var out = await api('calculator_prepare', payload), j = out.json || {};
+          if (!out.ok || !j.ok) throw new Error(j.message || 'Could not prepare your estimate. Please try again.');
+          cont.hidden = true; status.textContent = 'Last step: add your contact details to see your estimate.';
+          embedGhlForm($('[data-calc-ghl]'), j, function (prep) {
+            submitted = true; renderEstimate(prep); status.textContent = 'Thank you! Our team will confirm your roof measurements and estimate.';
+            $('[data-calc-ghl]').hidden = true;
+            if (prep.report && prep.report.url) result.insertAdjacentHTML('beforeend', '<div class="htr-rr-actions"><a class="htr-rr-btn" href="' + esc(prep.report.url) + '&print=1" target="_blank" rel="noopener">Download report (PDF)</a></div>');
+          });
+        } catch (err) { state.mapLocked = false; $('[data-address-search]').removeAttribute('inert'); status.textContent = err.message; cont.disabled = false; Array.prototype.forEach.call(inputs.elements, function (el) { el.disabled = false; }); }
+      });
+    }
+    if (lead) lead.addEventListener('submit', async function (ev) {
       ev.preventDefault();
       if (!inputs.reportValidity() || !lead.reportValidity()) return;
       if (!state.lat || !state.lng || !state.address) { show('#htr-rr-err1', 'Please select your full address from the suggestions.'); return; }
@@ -291,11 +383,28 @@
       state.material = b.dataset.mat;
       $$('.htr-rr-mat').forEach(function (x) { x.setAttribute('aria-checked', x === b ? 'true' : 'false'); });
       unlock(4); focusCard(4);
+      if (ghlMode) ghlPrepare();
     });
   });
 
+  /* GHL form mode: save + price the report, then show the GHL form. A new pin or roof type prepares a new report. */
+  var ghlKey = '';
+  async function ghlPrepare() {
+    var key = [state.lat, state.lng, state.material].join('|'), box = $('#htr-rr-ghl');
+    if (!box || key === ghlKey) return;
+    ghlKey = key; show('#htr-rr-err4', '');
+    box.innerHTML = '<p class="htr-rr-note">Preparing your roof report…</p>';
+    try {
+      var out = await api('prepare', { address: state.address, city: state.city, zip: state.zip, lat: state.lat, lng: state.lng, material: state.material, website: '', source_url: location.href }), j = out.json || {};
+      if (!out.ok || !j.ok) throw new Error(j.message || 'Something went wrong. Please try again or call us.');
+      if (key !== ghlKey) return; // the customer changed the pin or roof type meanwhile
+      state.report = j.report;
+      embedGhlForm(box, j, function (prep) { unlock(6); progress(6); renderResult(prep.report); focusCard(6); });
+    } catch (e) { ghlKey = ''; box.innerHTML = ''; show('#htr-rr-err4', e.message); }
+  }
+
   /* ---------- Step 4: contact + submit ---------- */
-  $('#htr-rr-form').addEventListener('submit', async function (ev) {
+  if (!ghlMode) $('#htr-rr-form').addEventListener('submit', async function (ev) {
     ev.preventDefault();
     var f = ev.target, btn = $('#htr-rr-submit');
     show('#htr-rr-err4', '');

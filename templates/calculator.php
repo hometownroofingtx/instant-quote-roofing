@@ -2,6 +2,7 @@
 /** Public calculator using saved pricing and the existing lead pipeline. */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 $settings = HTR_RR_Settings::all();
+$ghl_mode = 'ghl_form' === HTR_RR_Settings::public_config()['contactMode'];
 ?>
 <div class="htr-rr htr-rr-calculator" data-htr-calculator>
  <div class="htr-rr-calc-layout">
@@ -35,6 +36,11 @@ $settings = HTR_RR_Settings::all();
     </div>
    </div>
   </div>
+  <?php if ( $ghl_mode ) : ?>
+   <button type="button" class="htr-rr-btn" data-calc-continue>Continue to my estimate</button>
+   <p data-calc-status role="status"></p>
+   <div class="htr-rr-ghl" data-calc-ghl aria-live="polite" hidden></div>
+  <?php else : ?>
   <form data-calc-lead>
    <div class="htr-rr-row"><label>First name *<input name="first_name" autocomplete="given-name" required></label><label>Last name *<input name="last_name" autocomplete="family-name" required></label></div>
    <div class="htr-rr-row"><label>Email *<input name="email" type="email" autocomplete="email" required></label><label>Phone *<input name="phone" type="tel" autocomplete="tel" inputmode="tel" required></label></div>
@@ -46,6 +52,7 @@ $settings = HTR_RR_Settings::all();
    <button type="submit" class="htr-rr-btn" data-calc-send>Calculate my estimate</button>
    <p data-calc-status role="status"></p>
   </form>
+  <?php endif; ?>
  </div>
    <div data-calc-result aria-live="polite" hidden></div>
    <p class="htr-rr-calc-footer">Preliminary estimate using dimensions you enter. Final pricing may vary after an on-site inspection.</p>

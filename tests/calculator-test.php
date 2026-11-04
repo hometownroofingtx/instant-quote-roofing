@@ -7,6 +7,7 @@ class WP_REST_Request {
  public $data;
  public function __construct( $data ) { $this->data = $data; }
  public function get_json_params() { return $this->data; }
+ public function get_header( $name ) { return $GLOBALS['request_headers'][ $name ] ?? ''; }
 }
 class WP_REST_Response {
  public $data; public $status;
@@ -30,6 +31,8 @@ class HTR_RR_DB {
  public static function reports() { return 'isolated'; }
  public static function update_report( $id, $data ) { $GLOBALS['report'] = array_merge( $GLOBALS['report'], $data ); }
  public static function get_report( $id ) { return $GLOBALS['report']; }
+ public static function get_by_token( $token ) { return ( $GLOBALS['report']['token'] ?? '' ) === $token ? $GLOBALS['report'] : null; }
+ public static function log( $level, $source, $message, $id = null ) {}
 }
 class HTR_RR_Leads {
  public static function send( $id ) { $GLOBALS['sent'][] = $id; }
@@ -84,4 +87,29 @@ $rateKey = 'htr_rr_rl_' . substr( hash( 'sha256', 'isolated-test' ), 0, 20 );
 $GLOBALS['transients'][ $rateKey ] = 5;
 check( HTR_RR_REST::calculator_lead( new WP_REST_Request( array_merge( $valid, $contact ) ) )->status === 429, 'Lead rate limit retained.' );
 check( count( $GLOBALS['sent'] ) === $sentBefore, 'Rejected request never sends a lead.' );
+// GHL mode uses the same calculator, source and lead pipeline, deferring contact capture.
+$GLOBALS['transients'] = array();
+check( HTR_RR_REST::calculator_prepare( new WP_REST_Request( array_merge( $valid, $contact ) ) )->status === 403, 'Plugin mode cannot bypass contact validation through prepare.' );
+$GLOBALS['saved']['contact_mode'] = 'ghl_form';
+$GLOBALS['saved']['n8n_secret'] = 'fixture-shared-secret';
+$prepared = HTR_RR_REST::calculator_prepare( new WP_REST_Request( array_merge( $valid, array_intersect_key( $contact, array_flip( array( 'address', 'lat', 'lng' ) ) ) ) ) );
+check( $prepared->data['ok'] && $GLOBALS['report']['lead_status'] === 'awaiting_form', 'GHL calculator saves a waiting report without contact details.' );
+check( $GLOBALS['report']['request_source'] === 'calculator', 'GHL calculator retains source tagging.' );
+check( count( $GLOBALS['sent'] ) === $sentBefore, 'Waiting reports never send leads.' );
+$token = $GLOBALS['report']['token'];
+check( ! HTR_RR_REST::status( new WP_REST_Request( array( 'token' => $token ) ) )->data['linked'], 'Waiting status does not reveal completion.' );
+check( HTR_RR_REST::status( new WP_REST_Request( array( 'token' => array() ) ) )->status === 404, 'Malformed polling token is rejected.' );
+$link = array_merge( $contact, array( 'report_id' => $GLOBALS['wpdb']->insert_id ) );
+check( HTR_RR_REST::link_contact( new WP_REST_Request( $link ) )->status === 403, 'Contact linking requires the shared secret.' );
+$GLOBALS['request_headers']['x_htr_key'] = 'fixture-shared-secret';
+check( HTR_RR_REST::link_contact( new WP_REST_Request( array( 'report_id' => 1 ) ) )->status === 400, 'Invalid contact details do not link a waiting report.' );
+$linked = HTR_RR_REST::link_contact( new WP_REST_Request( $link ) );
+check( $linked->data['linked'] && $GLOBALS['report']['first_name'] === 'Test', 'Authenticated callback saves contact details.' );
+check( $GLOBALS['report']['request_source'] === 'calculator' && count( $GLOBALS['sent'] ) === $sentBefore + 1, 'Linked calculator sends through the existing pipeline with source intact.' );
+check( HTR_RR_REST::status( new WP_REST_Request( array( 'token' => $token ) ) )->data['report']['first_name'] === 'Test', 'Polling returns the updated linked report.' );
+HTR_RR_REST::link_contact( new WP_REST_Request( $link ) );
+check( count( $GLOBALS['sent'] ) === $sentBefore + 1, 'Duplicate link callbacks do not send again.' );
+$GLOBALS['transients'] = array();
+$prepared = HTR_RR_REST::prepare( new WP_REST_Request( array_merge( $valid, $contact ) ) );
+check( $prepared->data['ok'] && $GLOBALS['report']['request_source'] === 'instant_roof' && $GLOBALS['report']['lead_status'] === 'awaiting_form', 'Instant Roof GHL prepare keeps source and waiting status.' );
 echo "Calculator checks passed. Total checks: $checks\n";

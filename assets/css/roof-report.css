@@ -156,3 +156,7 @@
 .htr-rr .htr-rr-mat:hover{border-color:#6f8ba5;background:#f8fafc}
 .htr-rr .htr-rr-mat[aria-checked="true"]{background:#edf4fb;border-color:var(--navy);box-shadow:0 0 0 2px var(--navy)}
 .htr-rr .htr-rr-mat[aria-checked="true"]:after{content:"\2713";position:absolute;top:8px;right:8px;display:grid;place-items:center;width:24px;height:24px;border:2px solid #fff;border-radius:50%;background:var(--navy);color:#fff;font-size:13px;line-height:1}
+
+/* 1.1.0: GHL form at the contact step */
+.htr-rr-ghl{min-height:120px}
+.htr-rr-ghl iframe{display:block;width:100%;min-height:780px;border:0}

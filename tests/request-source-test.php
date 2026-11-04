@@ -32,4 +32,8 @@ $report['measurements'] = '{}';
 check( HTR_RR_Report_Page::request_source( $report ) === 'instant_roof', 'Legacy aerial reports use Instant Roof source' );
 $report['measurements'] = 'invalid';
 check( HTR_RR_Report_Page::source_label( $report ) === 'Instant Roof', 'Unavailable legacy measurement data has a safe fallback' );
+class HTR_RR_DB {
+    public static function get_report( $id ) { return array( 'lead_status' => 'awaiting_form' ); }
+}
+check( HTR_RR_Leads::send( 1 ) === false, 'Waiting GHL reports never reach the outbound sender' );
 echo "Request-source checks passed. Total checks: $checks\n";

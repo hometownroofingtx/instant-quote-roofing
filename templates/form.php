@@ -79,6 +79,10 @@ $cfg = HTR_RR_Settings::public_config();
 		<section class="htr-rr-card" data-card="4" aria-disabled="true">
 			<h3><span class="htr-rr-num">4</span> Your contact information</h3>
 			<p class="htr-rr-sub">We will send your roof report to this email.</p>
+			<?php if ( 'ghl_form' === $cfg['contactMode'] ) : ?>
+				<div class="htr-rr-ghl" id="htr-rr-ghl" aria-live="polite"></div>
+				<p class="htr-rr-error" id="htr-rr-err4" role="alert" hidden></p>
+			<?php else : ?>
 			<form id="htr-rr-form" novalidate>
 				<div class="htr-rr-row">
 					<label>First name *<input name="first_name" autocomplete="given-name" required></label>
@@ -101,6 +105,7 @@ $cfg = HTR_RR_Settings::public_config();
 				<p class="htr-rr-error" id="htr-rr-err4" role="alert" hidden></p>
 				<button type="submit" class="htr-rr-btn" id="htr-rr-submit">Generate my roof report</button>
 			</form>
+			<?php endif; ?>
 		</section>
 
 		<!-- 5. Analysing -->
