@@ -43,6 +43,8 @@ class HTR_RR_Leads {
 		$e = $r['estimate'] ? json_decode( $r['estimate'], true ) : array();
 		return array(
 			'event'           => 'roof_report',
+			'request_source'  => HTR_RR_Report_Page::request_source( $r ),
+			'tags'            => array( 'calculator' === HTR_RR_Report_Page::request_source( $r ) ? 'Calculator' : 'Instant Roof Request' ),
 			'report_id'       => (int) $r['id'],
 			'report_url'      => HTR_RR_Report_Page::url( $r['token'] ),
 			'created_at'      => $r['created_at'] . 'Z',

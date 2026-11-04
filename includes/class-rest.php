@@ -167,6 +167,7 @@ class HTR_RR_REST {
 				'token'      => $token,
 				'created_at' => current_time( 'mysql', true ),
 				'status'     => 'processing',
+				'request_source' => $calculator ? 'calculator' : 'instant_roof',
 				'first_name' => $first,
 				'last_name'  => $last,
 				'email'      => $email,

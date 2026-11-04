@@ -8,7 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class HTR_RR_DB {
-	const SCHEMA = 3;
+	const SCHEMA = 4;
 
 	public static function reports() {
 		global $wpdb;
@@ -30,6 +30,7 @@ class HTR_RR_DB {
 			token VARCHAR(40) NOT NULL,
 			created_at DATETIME NOT NULL,
 			status VARCHAR(20) NOT NULL DEFAULT 'pending',
+			request_source VARCHAR(20) NOT NULL DEFAULT '',
 			first_name VARCHAR(80) NOT NULL DEFAULT '',
 			last_name VARCHAR(80) NOT NULL DEFAULT '',
 			email VARCHAR(160) NOT NULL DEFAULT '',

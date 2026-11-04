@@ -55,7 +55,14 @@
       ac.setAttribute('aria-label', 'Property address');
       (redirect || calculator ? $('[data-address-search]') : $('#htr-rr-search')).appendChild(ac);
       if (redirect) ac.addEventListener('input', function () { selectedPlaceId = null; });
-      if (calculator) ac.addEventListener('input', function () { state.lat = state.lng = null; state.address = ''; $('[data-calc-address]').textContent = ''; $('[data-calc-inputs]').dispatchEvent(new Event('input')); });
+      if (calculator) ac.addEventListener('input', function () {
+        if (state.mapLocked) return;
+        state.lat = state.lng = null; state.address = '';
+        clearTimeout(pvTimer); pvSeq++;
+        $('[data-calc-property]').hidden = true;
+        $('[data-calc-address]').textContent = '';
+        $('[data-calc-inputs]').dispatchEvent(new Event('input'));
+      });
       ac.addEventListener('gmp-select', async function (ev) {
         try {
           var place = ev.placePrediction.toPlace();
@@ -102,10 +109,13 @@
       return;
     }
     if (calculator) {
+      if (state.mapLocked) return;
       state.lat = place.location.lat(); state.lng = place.location.lng(); state.address = place.formattedAddress || '';
       state.city = comp(comps, 'locality') || comp(comps, 'postal_town'); state.zip = comp(comps, 'postal_code', true);
       $('[data-calc-address]').textContent = state.address;
       show('#htr-rr-err1', '');
+      $('[data-calc-property]').hidden = false;
+      showMap().catch(function () { show('#htr-rr-err1', 'The map could not load. You can still use your selected address.'); });
       return;
     }
     pick(place.location.lat(), place.location.lng(), place.formattedAddress, comps);
@@ -134,9 +144,11 @@
 
   /* Step 2 property card: roof preview from Google (cached on the server, shared with the final report). */
   var pvTimer = null, pvSeq = 0;
-  function previewSoon() { clearTimeout(pvTimer); pvTimer = setTimeout(preview, 700); }
+  function previewSoon() { if (calculator) return; clearTimeout(pvTimer); pvSeq++; pvTimer = setTimeout(preview, 700); }
   async function preview() {
+    if (calculator || state.lat == null || state.lng == null) return;
     var seq = ++pvSeq, facts = $('#htr-rr-facts'), note = $('#htr-rr-propnote');
+    note.classList.remove('htr-rr-error');
     facts.innerHTML = '<div><dt>Roof area</dt><dd>Measuring&hellip;</dd></div>';
     try {
       var j = (await api('preview', { lat: state.lat, lng: state.lng })).json || {};
@@ -192,6 +204,8 @@
       payload.interests = $$('input[name="interests"]:checked', lead).map(function (el) { return el.value; });
       payload.address = state.address; payload.city = state.city; payload.zip = state.zip; payload.source_url = location.href;
       btn.disabled = true; status.textContent = 'Saving your request…';
+      state.mapLocked = true;
+      $('[data-address-search]').setAttribute('inert', '');
       Array.prototype.forEach.call(inputs.elements, function (el) { el.disabled = true; });
       try {
         var out = await api('calculator_lead', payload), j = out.json;
@@ -205,7 +219,7 @@
           result.insertAdjacentHTML('beforeend', '<div class="htr-rr-actions"><a class="htr-rr-btn" href="' + esc(j.report.url) + '&print=1" target="_blank" rel="noopener" aria-describedby="htr-rr-calc-download-help">Download report (PDF)</a></div><p class="htr-rr-note" id="htr-rr-calc-download-help">Opens your report in a new tab. Choose Save as PDF in the print dialog to download a copy.</p>');
         }
         Array.prototype.forEach.call(lead.elements, function (el) { el.disabled = true; });
-      } catch (err) { status.textContent = err.message; btn.disabled = false; Array.prototype.forEach.call(inputs.elements, function (el) { el.disabled = false; }); }
+      } catch (err) { state.mapLocked = false; $('[data-address-search]').removeAttribute('inert'); status.textContent = err.message; btn.disabled = false; Array.prototype.forEach.call(inputs.elements, function (el) { el.disabled = false; }); }
     });
   }
 
@@ -247,26 +261,27 @@
   async function showMap() {
     var maps = await google.maps.importLibrary('maps');
     var markerLib = await google.maps.importLibrary('marker');
+    if (state.lat == null || state.lng == null) return;
     var pos = { lat: state.lat, lng: state.lng };
     if (!state.map) {
-      state.map = new maps.Map($('#htr-rr-map'), {
+      state.map = new maps.Map($(calculator ? '[data-calc-map]' : '#htr-rr-map'), {
         center: pos, zoom: 20, mapTypeId: 'satellite', tilt: 0, heading: 0,
         zoomControl: true, streetViewControl: false, mapTypeControl: false, fullscreenControl: true, rotateControl: false,
         gestureHandling: 'greedy', minZoom: 15, maxZoom: 21
       });
       state.marker = new markerLib.Marker({ position: pos, map: state.map, draggable: true, title: 'Drag onto your roof' });
-      state.marker.addListener('dragend', function () { var p = state.marker.getPosition(); state.lat = p.lat(); state.lng = p.lng(); previewSoon(); });
-      state.map.addListener('click', function (e) { state.marker.setPosition(e.latLng); state.lat = e.latLng.lat(); state.lng = e.latLng.lng(); previewSoon(); });
+      state.marker.addListener('dragend', function () { if (state.mapLocked) { state.marker.setPosition({ lat: state.lat, lng: state.lng }); return; } var p = state.marker.getPosition(); state.lat = p.lat(); state.lng = p.lng(); previewSoon(); });
+      state.map.addListener('click', function (e) { if (state.mapLocked) return; state.marker.setPosition(e.latLng); state.lat = e.latLng.lat(); state.lng = e.latLng.lng(); previewSoon(); });
       $$('.htr-rr-maptype button').forEach(function (b) {
         b.addEventListener('click', function () {
           state.map.setMapTypeId(b.dataset.type);
-          $$('.htr-rr-maptype button').forEach(function (x) { x.classList.toggle('is-on', x === b); });
+          $$('.htr-rr-maptype button').forEach(function (x) { x.classList.toggle('is-on', x === b); x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
         });
       });
     } else {
       state.map.setCenter(pos); state.map.setZoom(20); state.marker.setPosition(pos);
     }
-    $('#htr-rr-confirm').disabled = false;
+    if (!calculator) $('#htr-rr-confirm').disabled = false;
   }
   $('#htr-rr-confirm').addEventListener('click', function () { unlock(3); focusCard(3); });
 

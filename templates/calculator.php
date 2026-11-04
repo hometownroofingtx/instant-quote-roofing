@@ -23,6 +23,18 @@ $settings = HTR_RR_Settings::all();
   <div class="htr-rr-search" data-address-search></div>
   <p data-calc-address aria-live="polite"></p>
   <p class="htr-rr-error" data-address-error role="alert" hidden></p>
+  <div data-calc-property hidden>
+   <p class="htr-rr-sub">Zoom in and drag the red pin onto your roof if it is not already there.</p>
+   <div class="htr-rr-confirm">
+    <div class="htr-rr-mapwrap">
+     <div class="htr-rr-map" data-calc-map aria-label="Satellite map of your property"></div>
+     <div class="htr-rr-maptype" role="group" aria-label="Map view">
+      <button type="button" data-type="satellite" class="is-on" aria-pressed="true">Satellite</button>
+      <button type="button" data-type="roadmap" aria-pressed="false">Map</button>
+     </div>
+    </div>
+   </div>
+  </div>
   <form data-calc-lead>
    <div class="htr-rr-row"><label>First name *<input name="first_name" autocomplete="given-name" required></label><label>Last name *<input name="last_name" autocomplete="family-name" required></label></div>
    <div class="htr-rr-row"><label>Email *<input name="email" type="email" autocomplete="email" required></label><label>Phone *<input name="phone" type="tel" autocomplete="tel" inputmode="tel" required></label></div>

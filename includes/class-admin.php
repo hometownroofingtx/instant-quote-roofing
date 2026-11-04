@@ -133,10 +133,10 @@ class HTR_RR_Admin {
 			echo '<div class="htr-empty"><span class="dashicons dashicons-media-document" aria-hidden="true"></span><h3>No reports yet</h3><p>Submitted roof reports will appear here with their estimate and lead delivery status.</p></div>';
 			return;
 		}
-		echo '<div class="htr-report-table-wrap"><table class="widefat htr-report-table"><thead><tr><th scope="col">Report</th><th scope="col">Customer &amp; property</th><th scope="col">Roof</th><th scope="col">Estimate</th><th scope="col">Report status</th><th scope="col">GHL delivery</th><th scope="col"><span class="screen-reader-text">Actions</span></th></tr></thead><tbody>';
+		echo '<div class="htr-report-table-wrap"><table class="widefat htr-report-table"><thead><tr><th scope="col">Report</th><th scope="col">Source</th><th scope="col">Customer &amp; property</th><th scope="col">Roof</th><th scope="col">Estimate</th><th scope="col">Report status</th><th scope="col">GHL delivery</th><th scope="col"><span class="screen-reader-text">Actions</span></th></tr></thead><tbody>';
 		foreach ( $rows as $r ) {
 			$est = null !== $r['price_low'] ? '$' . number_format( $r['price_low'] ) . ' – $' . number_format( $r['price_high'] ) : '—';
-			echo '<tr><td data-label="Report"><strong>#' . (int) $r['id'] . '</strong><span class="htr-cell-sub htr-date">' . esc_html( $r['created_at'] ) . ' UTC</span></td><td class="htr-property" data-label="Customer &amp; property"><strong>' . esc_html( $r['first_name'] . ' ' . $r['last_name'] ) . '</strong><span class="htr-cell-sub">' . esc_html( $r['address'] ) . '</span></td><td data-label="Roof"><span class="htr-material">' . esc_html( $r['material'] ) . '</span><span class="htr-cell-sub">' . ( null !== $r['area_sqft'] ? esc_html( number_format( $r['area_sqft'] ) ) . ' sq ft' : '—' ) . '</span></td><td class="htr-estimate" data-label="Estimate">' . esc_html( $est ) . '</td><td data-label="Report status">' . self::status_pill( $r['status'] ) . '</td><td data-label="GHL delivery">' . self::status_pill( $r['lead_status'] ) . '</td><td data-label="Actions"><div class="htr-report-row-actions"><a class="htr-view-link" href="' . esc_url( admin_url( 'admin.php?page=htr-rr-reports&view=' . (int) $r['id'] ) ) . '" aria-label="View report ' . (int) $r['id'] . '">View &rarr;</a>' . self::report_download_link( $r, 'htr-view-link' ) . '</div></td></tr>'; // phpcs:ignore
+			echo '<tr><td data-label="Report"><strong>#' . (int) $r['id'] . '</strong><span class="htr-cell-sub htr-date">' . esc_html( $r['created_at'] ) . ' UTC</span></td><td data-label="Source"><span class="htr-source-tag">' . esc_html( HTR_RR_Report_Page::source_label( $r ) ) . '</span></td><td class="htr-property" data-label="Customer &amp; property"><strong>' . esc_html( $r['first_name'] . ' ' . $r['last_name'] ) . '</strong><span class="htr-cell-sub">' . esc_html( $r['address'] ) . '</span></td><td data-label="Roof"><span class="htr-material">' . esc_html( $r['material'] ) . '</span><span class="htr-cell-sub">' . ( null !== $r['area_sqft'] ? esc_html( number_format( $r['area_sqft'] ) ) . ' sq ft' : '—' ) . '</span></td><td class="htr-estimate" data-label="Estimate">' . esc_html( $est ) . '</td><td data-label="Report status">' . self::status_pill( $r['status'] ) . '</td><td data-label="GHL delivery">' . self::status_pill( $r['lead_status'] ) . '</td><td data-label="Actions"><div class="htr-report-row-actions"><a class="htr-view-link" href="' . esc_url( admin_url( 'admin.php?page=htr-rr-reports&view=' . (int) $r['id'] ) ) . '" aria-label="View report ' . (int) $r['id'] . '">View &rarr;</a>' . self::report_download_link( $r, 'htr-view-link' ) . '</div></td></tr>'; // phpcs:ignore
 		}
 		echo '</tbody></table></div>';
 	}
@@ -165,19 +165,38 @@ class HTR_RR_Admin {
 			echo '</div>';
 			return;
 		}
-		$status = isset( $_GET['status'] ) ? sanitize_key( $_GET['status'] ) : ''; // phpcs:ignore
-		$where  = $status ? $wpdb->prepare( ' WHERE status=%s', $status ) : '';
+		$status = isset( $_GET['status'] ) && is_string( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : ''; // phpcs:ignore
+		$source = isset( $_GET['source'] ) && is_string( $_GET['source'] ) ? sanitize_key( wp_unslash( $_GET['source'] ) ) : ''; // phpcs:ignore
+		if ( ! in_array( $status, array( 'completed', 'review', 'processing' ), true ) ) { $status = ''; }
+		if ( ! in_array( $source, array( 'calculator', 'instant_roof' ), true ) ) { $source = ''; }
+		$conditions = array();
+		if ( $status ) { $conditions[] = $wpdb->prepare( 'status=%s', $status ); }
+		if ( $source ) {
+			// Match the legacy fallback used by request_source(), including JSON whitespace.
+			$conditions[] = $wpdb->prepare(
+				"(CASE WHEN request_source IN ('calculator','instant_roof') THEN request_source WHEN measurements REGEXP %s THEN 'calculator' ELSE 'instant_roof' END) = %s",
+				'"source"[[:space:]]*:[[:space:]]*"customer_entered"',
+				$source
+			);
+		}
+		$where = $conditions ? ' WHERE ' . implode( ' AND ', $conditions ) : '';
 		self::head( 'Reports' );
 		echo '<div class="htr-reports-toolbar">';
 		echo '<nav class="htr-status-filters" aria-label="Filter reports by status">';
 		foreach ( array( '' => 'All', 'completed' => 'Completed', 'review' => 'Needs review', 'processing' => 'Processing' ) as $k => $l ) {
-			echo '<a class="htr-status-filter htr-status-filter--' . esc_attr( $k ?: 'all' ) . ( $k === $status ? ' is-current' : '' ) . '"' . ( $k === $status ? ' aria-current="page"' : '' ) . ' href="' . esc_url( admin_url( 'admin.php?page=htr-rr-reports' . ( $k ? '&status=' . $k : '' ) ) ) . '"><span class="htr-filter-dot" aria-hidden="true"></span>' . esc_html( $l ) . '</a>';
+			$filter_url = add_query_arg( array( 'page' => 'htr-rr-reports', 'status' => $k, 'source' => $source ), admin_url( 'admin.php' ) );
+			echo '<a class="htr-status-filter htr-status-filter--' . esc_attr( $k ?: 'all' ) . ( $k === $status ? ' is-current' : '' ) . '"' . ( $k === $status ? ' aria-current="page"' : '' ) . ' href="' . esc_url( $filter_url ) . '"><span class="htr-filter-dot" aria-hidden="true"></span>' . esc_html( $l ) . '</a>';
 		}
 		echo '</nav>';
+		echo '<form class="htr-source-filter" method="get" action="' . esc_url( admin_url( 'admin.php' ) ) . '"><input type="hidden" name="page" value="htr-rr-reports"><input type="hidden" name="status" value="' . esc_attr( $status ) . '"><label for="htr-report-source">Source</label><select id="htr-report-source" name="source">';
+		foreach ( array( '' => 'All sources', 'calculator' => 'Calculator', 'instant_roof' => 'Instant Roof' ) as $value => $label ) {
+			echo '<option value="' . esc_attr( $value ) . '"' . selected( $source, $value, false ) . '>' . esc_html( $label ) . '</option>';
+		}
+		echo '</select><button type="submit" class="button">Filter</button></form>';
 		echo '<div class="htr-reports-export"><a class="button" title="Exports all reports across every status, beyond the 200 displayed" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=htr_rr_export_reports' ), 'htr_rr_export_reports' ) ) . '"><span class="dashicons dashicons-download" aria-hidden="true"></span> Download overall report (CSV)</a></div>';
 		echo '</div>';
 		self::table( $wpdb->get_results( 'SELECT * FROM ' . HTR_RR_DB::reports() . $where . ' ORDER BY id DESC LIMIT 200', ARRAY_A ) ); // phpcs:ignore
-		echo '<p class="description">Newest 200 shown.</p></div>';
+		echo '<p class="description">Newest 200 matching reports shown. The overall CSV includes all sources and statuses.</p></div>';
 	}
 
 	private static function report_details( array $r ) {
@@ -194,6 +213,7 @@ class HTR_RR_Admin {
 		self::detail_card( 'Customer details', array(
 			'Name' => trim( $r['first_name'] . ' ' . $r['last_name'] ), 'Email' => $r['email'], 'Phone' => $r['phone'],
 			'Interested in' => ucwords( str_replace( ',', ', ', $r['interests'] ) ),
+			'Request source' => HTR_RR_Report_Page::source_label( $r ),
 			'SMS consent recorded' => ucwords( str_replace( ',', ', ', $r['sms_consent'] ) ),
 		) );
 		self::detail_card( 'Property & service area', array(
@@ -448,6 +468,7 @@ class HTR_RR_Admin {
 		$last_id = (int) $wpdb->get_var( "SELECT MAX(id) FROM $table" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$columns = array(
 			'id' => 'Report ID', 'created_at' => 'Created (UTC)', 'status' => 'Report status',
+			'request_source' => 'Request source',
 			'first_name' => 'First name', 'last_name' => 'Last name', 'email' => 'Email', 'phone' => 'Phone',
 			'address' => 'Address', 'city' => 'City', 'zip' => 'ZIP code', 'material' => 'Roof type',
 			'area_sqft' => 'Roof area (sq ft)', 'pitch_x12' => 'Pitch (rise per 12)', 'faces' => 'Roof faces',
@@ -470,7 +491,7 @@ class HTR_RR_Admin {
 			foreach ( $rows as $row ) {
 				$cells = array();
 				foreach ( $columns as $key => $label ) {
-					$cells[] = self::report_csv_cell( $row[ $key ] ?? '' );
+					$cells[] = self::report_csv_cell( 'request_source' === $key ? HTR_RR_Report_Page::source_label( $row ) : ( $row[ $key ] ?? '' ) );
 				}
 				fputcsv( $stream, $cells, ',', '"', '' );
 				$after = (int) $row['id'];

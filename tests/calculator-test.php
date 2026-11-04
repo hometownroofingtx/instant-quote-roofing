@@ -63,11 +63,12 @@ foreach ( array( array( 'area_sqft', 0 ), array( 'area_sqft', 100001 ), array( '
  check( ! HTR_RR_REST::calculate( new WP_REST_Request( $bad ) )->data['ok'], 'Reject invalid ' . $invalid[0] );
 }
 $contact = array( 'first_name' => 'Test', 'last_name' => 'Fixture', 'email' => 'fixture@example.com', 'phone' => '2105550100', 'address' => '123 Main Street, San Antonio, TX', 'lat' => 29.4246002, 'lng' => -98.4951405, 'sms_service' => true, 'sms_marketing' => false );
-$response = HTR_RR_REST::calculator_lead( new WP_REST_Request( array_merge( $valid, $contact, array( 'price_low' => 1 ) ) ) );
+$response = HTR_RR_REST::calculator_lead( new WP_REST_Request( array_merge( $valid, $contact, array( 'price_low' => 1, 'request_source' => 'instant_roof' ) ) ) );
 check( $response->data['ok'], 'Calculator request saved.' );
 check( $response->data['estimate']['low'] === 12825, 'Successful lead response unlocks server-calculated estimate.' );
 check( $GLOBALS['report']['price_low'] === 12825, 'Submitted price ignored; server recalculates.' );
 check( $GLOBALS['report']['status'] === 'review', 'Manual measurements require review.' );
+check( $GLOBALS['report']['request_source'] === 'calculator', 'Calculator source saved before lead delivery.' );
 check( strpos( $GLOBALS['report']['review_reason'], 'customer-entered' ) !== false, 'Manual source identified.' );
 check( $GLOBALS['report']['sms_consent'] === 'service', 'Optional SMS choices retained.' );
 check( count( $GLOBALS['sent'] ) === 1 && $GLOBALS['solar_calls'] === 0, 'Existing lead sender reused without Solar for manual estimate.' );
@@ -75,8 +76,9 @@ $badContact = $contact; $badContact['phone'] = '123';
 check( ! HTR_RR_REST::calculator_lead( new WP_REST_Request( array_merge( $valid, $badContact ) ) )->data['ok'], 'Invalid contact rejected.' );
 $honeypot = array_merge( $valid, $contact, array( 'website' => 'spam' ) );
 check( ! HTR_RR_REST::calculator_lead( new WP_REST_Request( $honeypot ) )->data['ok'], 'Honeypot preserved.' );
-HTR_RR_REST::create( new WP_REST_Request( array_merge( $valid, $contact ) ) );
+HTR_RR_REST::create( new WP_REST_Request( array_merge( $valid, $contact, array( 'request_source' => 'calculator' ) ) ) );
 check( $GLOBALS['solar_calls'] === 1, 'Original report path still calls Solar.' );
+check( $GLOBALS['report']['request_source'] === 'instant_roof', 'Instant Roof source saved even when imagery fails.' );
 $sentBefore = count( $GLOBALS['sent'] );
 $rateKey = 'htr_rr_rl_' . substr( hash( 'sha256', 'isolated-test' ), 0, 20 );
 $GLOBALS['transients'][ $rateKey ] = 5;

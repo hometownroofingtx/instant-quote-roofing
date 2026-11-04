@@ -167,12 +167,17 @@
 .htr-rr-admin .htr-systems-strip .htr-health-error,.htr-rr-admin .htr-systems-strip .htr-health-error a,.htr-rr-admin .htr-systems-strip .htr-health-error p{font-size:12px}
 .htr-rr-admin .htr-report-table .htr-cell-sub{font-size:13px;color:#52677c}
 .htr-rr-admin .htr-report-table .htr-date{font-size:12px}
+.htr-rr-admin .htr-report-table .htr-source-tag{display:inline-flex;justify-self:start;align-items:center;width:fit-content;margin:0;padding:3px 8px;border:1px solid #dce7f4;border-radius:5px;background:#edf4fc;color:#24649d;font-size:11px;font-weight:500;line-height:1.5}
 .htr-rr-admin .htr-report-table .htr-view-link{font-size:13px;min-height:34px}
 .htr-rr-admin .htr-report-row-actions{display:flex;align-items:center;gap:8px;white-space:nowrap}
 .htr-rr-admin .htr-report-table .htr-report-download{margin:0;gap:5px}
 .htr-rr-admin .htr-reports-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:4px 0 18px;padding:5px;border:1px solid #dfe5ec;border-radius:9px;background:#fff}
 .htr-rr-admin .htr-reports-toolbar .htr-status-filters{flex:1 1 auto;width:auto;min-width:0;margin:0;padding:0;border:0;background:transparent}
 .htr-rr-admin .htr-reports-export{display:flex;flex:0 0 auto;align-items:center;margin:0}
+.htr-rr-admin .htr-source-filter{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0}
+.htr-rr-admin .htr-source-filter label{color:#52677c;font-size:12px;font-weight:500}
+.htr-rr-admin .htr-source-filter select{min-height:36px;max-width:100%;margin:0;border-color:#dce5ef;border-radius:6px;font-size:12px}
+.htr-rr-admin .htr-source-filter .button{min-height:36px;margin:0;line-height:1.5;padding:7px 12px;font-size:12px}
 .htr-rr-admin .htr-reports-export .button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;margin:0;padding:4px 12px;font-size:12px;line-height:1.5}
 .htr-rr-admin .htr-report-download .dashicons,.htr-rr-admin .htr-reports-export .dashicons{display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;width:16px;height:16px;margin:0;font-size:16px;line-height:1}
 @media(max-width:782px){
@@ -180,6 +185,9 @@
  .htr-rr-admin .htr-reports-toolbar .htr-status-filters{flex:1 1 100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
  .htr-rr-admin .htr-reports-toolbar .htr-status-filter{justify-content:center;min-height:40px;padding:7px 6px}
  .htr-rr-admin .htr-reports-export,.htr-rr-admin .htr-reports-export .button{width:100%}
+ .htr-rr-admin .htr-source-filter{flex:1 1 100%;width:100%}
+ .htr-rr-admin .htr-source-filter select{flex:1;min-width:0;min-height:40px}
+ .htr-rr-admin .htr-source-filter .button{min-height:40px}
  .htr-rr-admin .htr-reports-export .button{min-height:40px;white-space:normal;text-align:center}
  .htr-rr-admin .htr-report-table-wrap{border:0;background:transparent;overflow:visible}
  .htr-rr-admin .htr-report-table{display:block;min-width:0;width:100%;background:transparent}

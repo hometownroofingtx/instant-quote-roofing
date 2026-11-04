@@ -17,6 +17,19 @@ class HTR_RR_Report_Page {
 		return add_query_arg( 'htr_roof_report', $token, home_url( '/' ) );
 	}
 
+	/** Older reports have no explicit source; manual dimensions identify calculator requests. */
+	public static function request_source( array $report ) {
+		if ( in_array( $report['request_source'] ?? '', array( 'calculator', 'instant_roof' ), true ) ) {
+			return $report['request_source'];
+		}
+		$measurements = json_decode( $report['measurements'] ?? '', true );
+		return is_array( $measurements ) && 'customer_entered' === ( $measurements['source'] ?? '' ) ? 'calculator' : 'instant_roof';
+	}
+
+	public static function source_label( array $report ) {
+		return 'calculator' === self::request_source( $report ) ? 'Calculator' : 'Instant Roof';
+	}
+
 	/** What the browser may see about a report. */
 	public static function public_view( array $r ) {
 		$m = $r['measurements'] ? json_decode( $r['measurements'], true ) : null;

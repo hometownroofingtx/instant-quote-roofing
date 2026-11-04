@@ -75,6 +75,16 @@ API keys, webhook credentials, customer text, and existing reports are not inclu
 
 ## Customer experience
 
+### Request source tags and calculator map
+
+New reports save a server-selected `request_source`: `calculator` or `instant_roof`. Reports and Overview show **Calculator** or **Instant Roof** in a dedicated **Source** column; report details and the overall CSV also identify the source. Schema version 4 adds the source column automatically. Existing reports remain intact, and older calculator reports are identified from their saved customer-entered measurement source.
+
+On the Reports screen, choose **All sources**, **Calculator**, or **Instant Roof** beside the status tabs and click **Filter**. Source and status filters combine, and switching status tabs keeps the selected source. Older reports use the same source fallback as their labels. The overall CSV still exports all sources and statuses.
+
+The n8n webhook keeps its existing `event: roof_report` and adds `request_source` plus `tags`: `["Calculator"]` or `["Instant Roof Request"]`. Map this array into your GHL contact-tag action in n8n, appending to the contact's existing tags. WordPress sending this field does not confirm that the workflow has applied it in GHL. Retries and manual resends derive the same source/tag from the saved report; already-sent contacts are not automatically retagged.
+
+After selecting a full street address, the public calculator displays a full-width satellite map, Satellite/Map switches, and a draggable pin. Moving the pin updates coordinates used for the saved report and nearest-area pricing. The calculator does not request aerial roof measurements or display a roof-details sidebar. Pricing uses the dimensions the customer enters, and the estimate stays hidden until contact submission succeeds. The map remains responsive on smaller screens.
+
 The customer enters an address, confirms the property on a satellite map, chooses a roof type, provides contact details and consent selections, and receives a report with measurements or an explanation that review is needed.
 
 Report links use a random token:
