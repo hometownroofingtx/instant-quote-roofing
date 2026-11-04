@@ -84,14 +84,17 @@ class HTR_RR_Admin {
 			return;
 		}
 		wp_enqueue_style( 'htr-rr-admin', HTR_RR_URL . 'assets/css/admin.css', array(), HTR_RR_VERSION . '.' . filemtime( HTR_RR_DIR . 'assets/css/admin.css' ) );
+		if ( false !== strpos( $hook, 'htr-rr-settings' ) || false !== strpos( $hook, 'htr-rr-pricing' ) ) {
+			wp_enqueue_script( 'htr-rr-settings-admin', HTR_RR_URL . 'assets/js/settings-admin.js', array(), HTR_RR_VERSION . '.' . filemtime( HTR_RR_DIR . 'assets/js/settings-admin.js' ), true );
+		}
 		if ( false !== strpos( $hook, 'htr-rr-pricing' ) ) {
 			wp_enqueue_media();
 			wp_enqueue_script( 'htr-rr-pricing-admin', HTR_RR_URL . 'assets/js/pricing-admin.js', array(), HTR_RR_VERSION . '.' . filemtime( HTR_RR_DIR . 'assets/js/pricing-admin.js' ), true );
 		}
 	}
 
-	private static function head( $title, $sub = '' ) {
-		echo '<div class="wrap htr-rr-admin"><div class="htr-rr-ah htr-overview-header"><img src="' . esc_url( HTR_RR_URL . 'assets/img/logo.png' ) . '" alt="Hometown Roofing"><div class="htr-header-copy"><span class="htr-eyebrow">Roof report management</span><h1>' . esc_html( $title ) . '</h1>' . ( $sub ? '<p>' . esc_html( $sub ) . '</p>' : '' ) . '</div>';
+	public static function header( $title, $sub = '' ) {
+		echo '<div class="htr-rr-ah htr-overview-header"><img src="' . esc_url( HTR_RR_URL . 'assets/img/logo.png' ) . '" alt="Hometown Roofing"><div class="htr-header-copy"><span class="htr-eyebrow">Roof report management</span><h1>' . esc_html( $title ) . '</h1>' . ( $sub ? '<p>' . esc_html( $sub ) . '</p>' : '' ) . '</div>';
 		$current = isset( $_GET['page'] ) && is_string( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : 'htr-rr';
 		$pages = array(
 			'htr-rr' => array( 'Overview', 'dashboard' ),
@@ -99,6 +102,7 @@ class HTR_RR_Admin {
 			'htr-rr-pricing' => array( 'Pricing', 'tag' ),
 			'htr-rr-calc' => array( 'Calculator', 'calculator' ),
 			'htr-rr-settings' => array( 'Settings', 'admin-generic' ),
+			'htr-rr-floating' => array( 'Floating Side Tab', 'admin-links' ),
 			'htr-rr-logs' => array( 'Logs', 'list-view' ),
 		);
 		echo '<nav class="htr-quick-links" aria-label="Roof report management">';
@@ -108,6 +112,11 @@ class HTR_RR_Admin {
 		}
 		echo '</nav>';
 		echo '</div>';
+	}
+
+	private static function head( $title, $sub = '' ) {
+		echo '<div class="wrap htr-rr-admin">';
+		self::header( $title, $sub );
 		if ( ! empty( $_GET['saved'] ) ) { // phpcs:ignore
 			echo '<div class="notice notice-success is-dismissible"><p>Saved.</p></div>';
 		}
@@ -305,16 +314,17 @@ class HTR_RR_Admin {
 	public static function pricing() {
 		$s = HTR_RR_Settings::all();
 		self::head( 'Pricing', 'Manage roof types, service areas and the factors used in customer estimates.' );
+		self::settings_tabs( array( 'materials' => 'Roof types', 'areas' => 'Service areas', 'factors' => 'Pricing factors', 'transfer' => 'Import / Export' ), 'pricing' );
 		echo '<form class="htr-pricing-form" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 		wp_nonce_field( 'htr_rr_save' );
 		echo '<input type="hidden" name="action" value="htr_rr_save"><input type="hidden" name="section" value="pricing"><div class="htr-pricing-grid">';
-		echo '<section class="htr-box htr-pricing-section"><div class="htr-box-heading"><div><h2>Roof types</h2><p>USD per square foot of roof surface.</p></div><button type="button" class="button" data-htr-add="material">+ Add roof type</button></div><div class="htr-pricing-scroll"><table class="widefat htr-pricing-table htr-material-pricing-table"><thead><tr><th scope="col">Roof type</th><th scope="col">Image</th><th scope="col">Low $/sq ft</th><th scope="col">High $/sq ft</th><th scope="col">Show price</th><th scope="col"><span class="screen-reader-text">Actions</span></th></tr></thead><tbody id="htr-material-rows">';
+		echo '<section class="htr-box htr-pricing-section" data-settings-panel="materials"><div class="htr-box-heading"><div><h2>Roof types</h2><p>USD per square foot of roof surface.</p></div><button type="button" class="button" data-htr-add="material">+ Add roof type</button></div><div class="htr-pricing-scroll"><table class="widefat htr-pricing-table htr-material-pricing-table"><thead><tr><th scope="col">Roof type</th><th scope="col">Image</th><th scope="col">Low $/sq ft</th><th scope="col">High $/sq ft</th><th scope="col">Show price</th><th scope="col"><span class="screen-reader-text">Actions</span></th></tr></thead><tbody id="htr-material-rows">';
 		foreach ( $s['materials'] as $key => $material ) { self::pricing_material_row( $key, $material ); }
 		echo '</tbody></table></div><p class="htr-pricing-help">Turn off Show price to request an on-site quote for that roof type. New types appear in the customer form after saving.</p></section>';
-		echo '<section class="htr-box htr-pricing-section"><div class="htr-box-heading"><div><h2>Service areas</h2><p>Town centers and regional price adjustments.</p></div><button type="button" class="button" data-htr-add="area">+ Add service area</button></div><div class="htr-pricing-scroll"><table class="widefat htr-pricing-table"><thead><tr><th scope="col">Town</th><th scope="col">Latitude</th><th scope="col">Longitude</th><th scope="col">Price &times;</th><th scope="col"><span class="screen-reader-text">Actions</span></th></tr></thead><tbody id="htr-area-rows">';
+		echo '<section class="htr-box htr-pricing-section" data-settings-panel="areas"><div class="htr-box-heading"><div><h2>Service areas</h2><p>Town centers and regional price adjustments.</p></div><button type="button" class="button" data-htr-add="area">+ Add service area</button></div><div class="htr-pricing-scroll"><table class="widefat htr-pricing-table"><thead><tr><th scope="col">Town</th><th scope="col">Latitude</th><th scope="col">Longitude</th><th scope="col">Price &times;</th><th scope="col"><span class="screen-reader-text">Actions</span></th></tr></thead><tbody id="htr-area-rows">';
 		foreach ( $s['areas'] as $index => $area ) { self::pricing_area_row( $index, $area ); }
 		echo '</tbody></table></div><div class="htr-pricing-radius"><label>Service radius <input type="number" min="5" max="300" name="service_radius_mi" value="' . esc_attr( $s['service_radius_mi'] ) . '" required> <span>miles from the nearest town</span></label></div><p class="htr-pricing-help">1.00 keeps base pricing. For example, 1.10 adds 10% for that region.</p></section>';
-		echo '<section class="htr-box htr-pricing-factors"><div class="htr-box-heading"><div><h2>Additional factors</h2><p>Fine-tune the estimate using roof area, pitch and complexity.</p></div></div><div class="htr-factor-grid"><div class="htr-factor"><h3>Extra area</h3><label>Waste / extra area (%)<input type="number" step="0.5" min="0" max="50" name="waste_pct" value="' . esc_attr( $s['waste_pct'] ) . '"></label><p>Use 0 when your rates already include waste.</p></div><div class="htr-factor"><h3>Roof pitch</h3><div class="htr-factor-labels"><span>Pitch up to (/12)</span><span>Multiplier</span></div>';
+		echo '<section class="htr-box htr-pricing-factors" data-settings-panel="factors"><div class="htr-box-heading"><div><h2>Additional factors</h2><p>Fine-tune the estimate using roof area, pitch and complexity.</p></div></div><div class="htr-factor-grid"><div class="htr-factor"><h3>Extra area</h3><label>Waste / extra area (%)<input type="number" step="0.5" min="0" max="50" name="waste_pct" value="' . esc_attr( $s['waste_pct'] ) . '"></label><p>Use 0 when your rates already include waste.</p></div><div class="htr-factor"><h3>Roof pitch</h3><div class="htr-factor-labels"><span>Pitch up to (/12)</span><span>Multiplier</span></div>';
 		foreach ( $s['pitch_bands'] as $index => $band ) {
 			echo '<div class="htr-factor-pair"><input aria-label="Pitch band ' . (int) ( $index + 1 ) . ' maximum" type="number" min="1" max="99" name="pb[' . (int) $index . '][max]" value="' . esc_attr( $band['max'] ) . '"><input aria-label="Pitch band ' . (int) ( $index + 1 ) . ' multiplier" type="number" step="0.01" min="0.5" max="3" name="pb[' . (int) $index . '][mult]" value="' . esc_attr( $band['mult'] ) . '"></div>';
 		}
@@ -337,7 +347,7 @@ class HTR_RR_Admin {
 
 	private static function pricing_transfer_controls() {
 		?>
-		<section class="htr-box htr-pricing-transfer" aria-labelledby="htr-pricing-transfer-title">
+		<section class="htr-box htr-pricing-transfer" data-settings-panel="transfer" aria-labelledby="htr-pricing-transfer-title">
 			<div class="htr-box-heading"><div>
 				<h2 id="htr-pricing-transfer-title">Export / import pricing</h2>
 				<p>Back up your pricing or transfer it to another Roof Report installation.</p>
@@ -439,37 +449,49 @@ class HTR_RR_Admin {
 	public static function settings() {
 		$s = HTR_RR_Settings::all();
 		self::head( 'Settings', 'Manage integrations, customer messaging and report limits.' );
+		self::settings_tabs( array( 'maps' => 'Maps & measurements', 'leads' => 'Lead delivery', 'customer' => 'Customer information', 'consent' => 'SMS consent', 'usage' => 'Usage limits', 'floating' => 'Floating side tab', 'test' => 'Test Google Solar' ), 'settings' );
 		echo '<form class="htr-settings-form" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 		wp_nonce_field( 'htr_rr_save' );
 		echo '<input type="hidden" name="action" value="htr_rr_save"><input type="hidden" name="section" value="settings"><div class="htr-settings-grid">';
-		self::settings_card( 'Maps & roof measurements', 'Connect address search and Google Solar measurements.', 'location-alt' );
+		self::settings_card( 'Maps & roof measurements', 'Connect address search and Google Solar measurements.', 'location-alt', 'maps' );
 		self::field( 'google_browser_key', 'Google browser key', $s['google_browser_key'], 'Used on the customer form for Maps, Places, Geocoding and Static Maps. Restrict it to your website in Google Cloud.' );
 		self::secret( 'google_server_key', 'Google Solar server key', $s['google_server_key'], 'Used only on the server. Restrict it to the Solar API. Leave blank to keep the saved key.' );
 		echo '<tr><th><label for="required_quality">Preferred imagery quality</label></th><td><select id="required_quality" name="required_quality"><option value="MEDIUM"' . selected( $s['required_quality'], 'MEDIUM', false ) . '>Medium (then base)</option><option value="HIGH"' . selected( $s['required_quality'], 'HIGH', false ) . '>High (then medium, base)</option></select><p class="description">If the preferred quality is unavailable, the next supported quality is tried.</p></td></tr></tbody></table></section>';
-		self::settings_card( 'Lead delivery', 'Send customer leads to GoHighLevel through n8n.', 'networking' );
+		self::settings_card( 'Lead delivery', 'Send customer leads to GoHighLevel through n8n.', 'networking', 'leads' );
 		self::field( 'n8n_webhook_url', 'n8n webhook URL', $s['n8n_webhook_url'], 'The workflow endpoint that creates or updates the GHL contact.' );
 		self::secret( 'n8n_secret', 'Shared signing secret', $s['n8n_secret'], 'Must match the secret in your n8n workflow. Leave blank to keep the saved value.' );
 		self::field( 'notify_email', 'Delivery alert email', $s['notify_email'], 'Receives an alert when lead delivery exhausts its retries.' );
 		self::field( 'ghl_form_id', 'GHL form ID', $s['ghl_form_id'], 'Identifies the originating form in the lead payload.' );
 		echo '<tr><th><label for="contact_mode">Contact step</label></th><td><select id="contact_mode" name="contact_mode"><option value="plugin"' . selected( $s['contact_mode'], 'plugin', false ) . '>Plugin form (leads sent to GHL through n8n)</option><option value="ghl_form"' . selected( $s['contact_mode'], 'ghl_form', false ) . '>GHL form (the form ID above, embedded)</option></select><p class="description">GHL form: the customer fills in the GHL form itself, so every lead is a real form submission in GHL. The roof report is saved first and linked when the form is submitted. Switch back to Plugin form at any time.</p></td></tr>';
 		echo '</tbody></table></section>';
-		self::settings_card( 'Customer information', 'Contact details and estimate wording shown to homeowners.', 'admin-users' );
+		self::floating_tab_settings( $s );
+		self::settings_card( 'Customer information', 'Contact details and estimate wording shown to homeowners.', 'admin-users', 'customer' );
 		self::field( 'company_phone', 'Company phone number', $s['company_phone'], 'Displayed on customer reports and the roof report form.' );
 		echo '<tr><th><label for="htr-settings-disclaimer">Estimate disclaimer</label></th><td><textarea id="htr-settings-disclaimer" name="disclaimer" rows="4">' . esc_textarea( $s['disclaimer'] ) . '</textarea><p class="description">Explains that the displayed price range is an estimate.</p></td></tr></tbody></table></section>';
-		self::settings_card( 'SMS consent', 'Maintain the consent text displayed in the customer form.', 'format-chat' );
+		self::settings_card( 'SMS consent', 'Maintain the consent text displayed in the customer form.', 'format-chat', 'consent' );
 		echo '<tr><th><label for="htr-consent-service">Service text messages</label></th><td><textarea id="htr-consent-service" name="consent_service" rows="5">' . esc_textarea( $s['consent_service'] ) . '</textarea></td></tr><tr><th><label for="htr-consent-marketing">Marketing text messages</label></th><td><textarea id="htr-consent-marketing" name="consent_marketing" rows="5">' . esc_textarea( $s['consent_marketing'] ) . '</textarea><p class="description">Keep both consent statements consistent with GHL Form 30 and your A2P campaign.</p></td></tr></tbody></table></section>';
-		echo '</div><section class="htr-settings-limit"><div><h2>Report usage limit</h2><p>Control how many reports each visitor can request per hour.</p></div><label for="htr-rate-limit">Reports per visitor / hour<input id="htr-rate-limit" type="number" min="1" max="50" name="rate_limit_hour" value="' . esc_attr( $s['rate_limit_hour'] ) . '"></label></section><div class="htr-settings-save">';
+		echo '</div><section class="htr-settings-limit" data-settings-panel="usage"><div><h2>Report usage limit</h2><p>Control how many reports each visitor can request per hour.</p></div><label for="htr-rate-limit">Reports per visitor / hour<input id="htr-rate-limit" type="number" min="1" max="50" name="rate_limit_hour" value="' . esc_attr( $s['rate_limit_hour'] ) . '"></label></section><div class="htr-settings-save">';
 		submit_button( 'Save settings', 'primary', 'submit', false );
 		echo '<span>Blank secret fields keep their saved values.</span></div></form>';
-		echo '<section class="htr-box htr-settings-test"><div class="htr-box-heading"><div><h2>Test Google Solar</h2><p>Run a measurement request using your saved server key. Save any key changes before testing.</p></div><span class="dashicons dashicons-search" aria-hidden="true"></span></div><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+		echo '<section class="htr-box htr-settings-test" data-settings-panel="test"><div class="htr-box-heading"><div><h2>Test Google Solar</h2><p>Run a measurement request using your saved server key. Save any key changes before testing.</p></div><span class="dashicons dashicons-search" aria-hidden="true"></span></div><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 		wp_nonce_field( 'htr_rr_test_solar' );
 		echo '<input type="hidden" name="action" value="htr_rr_test_solar"><label for="htr-solar-lat">Latitude<input id="htr-solar-lat" name="lat" value="29.7946641"></label><label for="htr-solar-lng">Longitude<input id="htr-solar-lng" name="lng" value="-98.7319703"></label>';
 		submit_button( 'Test connection', 'secondary', 'submit', false );
 		echo '</form></section></div>';
 	}
 
-	private static function settings_card( $title, $description, $icon ) {
-		echo '<section class="htr-box htr-settings-card"><div class="htr-box-heading"><div><h2>' . esc_html( $title ) . '</h2><p>' . esc_html( $description ) . '</p></div><span class="dashicons dashicons-' . esc_attr( $icon ) . '" aria-hidden="true"></span></div><table class="form-table"><tbody>';
+	private static function settings_tabs( array $tabs, $page ) {
+		echo '<nav class="htr-settings-tabs" role="tablist" aria-label="' . esc_attr( ucfirst( $page ) ) . ' sections" data-settings-tabs data-settings-page="' . esc_attr( $page ) . '" hidden>';
+		foreach ( $tabs as $key => $label ) {
+			echo '<button type="button" role="tab" id="htr-settings-tab-' . esc_attr( $key ) . '" aria-controls="htr-settings-panel-' . esc_attr( $key ) . '" aria-selected="false" tabindex="-1" data-settings-tab="' . esc_attr( $key ) . '">' . esc_html( $label ) . '</button>';
+		}
+		echo '</nav>';
+	}
+	private static function floating_tab_settings( array $s ) {
+		echo '<section class="htr-box htr-settings-card" data-settings-panel="floating"><h2>Floating side tab</h2><p>Configure links, icons, styling and page visibility in the dedicated settings screen.</p><a class="button" href="' . esc_url( admin_url( 'admin.php?page=htr-rr-floating' ) ) . '">Open Floating Side Tab Settings</a></section>';
+	}
+	private static function settings_card( $title, $description, $icon, $tab ) {
+		echo '<section class="htr-box htr-settings-card" data-settings-panel="' . esc_attr( $tab ) . '"><div class="htr-box-heading"><div><h2>' . esc_html( $title ) . '</h2><p>' . esc_html( $description ) . '</p></div><span class="dashicons dashicons-' . esc_attr( $icon ) . '" aria-hidden="true"></span></div><table class="form-table"><tbody>';
 	}
 
 	private static function field( $k, $label, $v, $help ) {

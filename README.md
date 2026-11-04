@@ -26,6 +26,8 @@ Activation creates the report and log tables and schedules lead retries. No Node
 
 ## Initial setup
 
+The main Settings screen uses tabs for Maps & measurements, Lead delivery, Customer information, SMS consent, Usage limits, Floating side tab, and Test Google Solar. Switching tabs preserves unsaved field values; **Save settings** saves the existing settings form across all tabs. The Solar test remains a separate action. Arrow keys, Home and End navigate the tabs, and the last selected tab is remembered for the browser session. Without JavaScript, all sections remain visible.
+
 ### Maps and roof measurements
 
 Configure the two Google keys under **Settings → Maps & roof measurements**:
@@ -78,6 +80,22 @@ If an import fails, the error identifies the section to fix. Radius and roof-fac
 API keys, webhook credentials, customer text, and existing reports are not included or changed. Media files and attachment IDs are not transferred: matching roof types retain their destination-site images, and new roof types use the default image fallback until you choose an image locally. Imported pricing applies to future estimates. The format is `htr-rr-pricing`, version `1`.
 
 ## Customer experience
+
+### Floating quote tab
+
+Open **Roof Reports > Floating Side Tab** (also linked from Settings) for a dedicated tabbed editor with an interactive live preview. It is off by default.
+
+- **General:** enable the tab; choose left/right, top/center/bottom, an edge offset, and desktop/tablet/mobile visibility. Layouts include the original vertical quote tab, Icon stack, Icon + label, and Expandable. Expandable opens on hover/keyboard focus or click and closes with Escape or a click outside.
+- **Items:** add up to 10 links with labels, one of eight built-in icons, and optional new-tab behavior. Reorder with the up/down arrows. Web, telephone and email links are supported. The original quote layout keeps its destination page, label and dismissible message. Other layouts fall back to that destination if no quick links are configured.
+- **Style / Quick Settings:** change icon/text, hover and background colors, border radius, shadow and z-index. Preview desktop/tablet/mobile without saving. Preview links never navigate away.
+- **Display Rules:** show across the site or only selected published pages, exclude selected pages, and optionally hide on linked destination pages. Exclusions take priority. Customer reports, feeds and admin pages are always excluded. An empty include-only selection shows nowhere. Mobile is up to 600px, tablet 601-1024px, desktop above 1024px.
+- **Import / Export:** JSON downloads contain only floating-tab settings. Imports validate the format before saving and replace only these settings, preserving API keys, GHL setup and pricing. Export a backup first. Page selections store WordPress page IDs; review them after transferring to another site.
+
+The message dismissal lasts for a browser-tab session. The frontend loads only the small tab assets where display rules permit it; it does not load Google Maps or submit leads. Existing quote-tab options are reused. Unsaved preview changes do not affect visitors. Use **Save Changes** to publish the tab configuration.
+
+**Drawer option:** Under General > Quote link action, choose **Slide-out drawer**, then select **Instant Roof Report** or **Roof Calculator**. The quote tab opens that existing form in a panel from the selected side. In other layouts, links matching the configured destination page open the drawer; unrelated links retain navigation. A drawer-only quote tab needs no destination page. The embedded form loads on first open, keeps its inputs when closed/reopened, and uses the existing Plugin form/GHL form configuration. Close with the button, backdrop, or Escape. Mobile uses the full viewport width; reduced-motion preferences skip the slide animation. A new-tab link is available as a fallback. The admin preview shows a drawer placeholder without loading Google or GHL. The standalone embed URL is available only while the tab and drawer mode are enabled, is marked noindex, and does not render the theme header/footer.
+
+Validation: `php tests/floating-admin-test.php --preview` renders an isolated fixture using the actual admin template and tests sanitization/visibility. With Playwright and an installed browser, `node tests/floating-browser-test.js` checks layouts, live preview, item ordering, keyboard controls and mobile overflow. Set `HTR_BROWSER_CHANNEL=msedge` to use installed Edge. These fixtures do not verify a deployed WordPress theme or live customer navigation.
 
 ### Request source tags and calculator map
 

@@ -27,6 +27,12 @@ require_once HTR_RR_DIR . 'includes/class-rest.php';
 require_once HTR_RR_DIR . 'includes/class-shortcode.php';
 require_once HTR_RR_DIR . 'includes/class-report-page.php';
 require_once HTR_RR_DIR . 'includes/class-admin.php';
+require_once HTR_RR_DIR . 'includes/class-floating-tab.php';
+HTR_RR_Floating_Tab::init();
+if ( is_admin() ) {
+	require_once HTR_RR_DIR . 'includes/class-floating-admin.php';
+	HTR_RR_Floating_Admin::init();
+}
 
 register_activation_hook( __FILE__, array( 'HTR_RR_DB', 'install' ) );
 register_activation_hook( __FILE__, array( 'HTR_RR_Leads', 'schedule' ) );
