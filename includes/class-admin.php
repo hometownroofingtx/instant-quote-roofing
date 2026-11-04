@@ -9,10 +9,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class HTR_RR_Admin {
 	const CAP = 'manage_options';
+	const PRICING_MAX_BYTES = 1048576;
 
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
 		add_action( 'admin_post_htr_rr_save', array( __CLASS__, 'save' ) );
+		add_action( 'admin_post_htr_rr_export_pricing', array( __CLASS__, 'export_pricing' ) );
+		add_action( 'admin_post_htr_rr_import_pricing', array( __CLASS__, 'import_pricing' ) );
 		add_action( 'admin_post_htr_rr_resend', array( __CLASS__, 'resend' ) );
 		add_action( 'admin_post_htr_rr_test_solar', array( __CLASS__, 'test_solar' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
@@ -245,7 +248,41 @@ class HTR_RR_Admin {
 		self::pricing_material_row( '__INDEX__', array( 'label' => '', 'low' => 0, 'high' => 0, 'quote' => 1 ), true );
 		echo '</template><template id="htr-area-template">';
 		self::pricing_area_row( '__INDEX__', array( 'town' => '', 'lat' => '', 'lng' => '', 'mult' => 1 ), true );
-		echo '</template></div>';
+		echo '</template>';
+		self::pricing_transfer_controls();
+		echo '</div>';
+	}
+
+	private static function pricing_transfer_controls() {
+		?>
+		<section class="htr-box htr-pricing-transfer" aria-labelledby="htr-pricing-transfer-title">
+			<div class="htr-box-heading"><div>
+				<h2 id="htr-pricing-transfer-title">Export / import pricing</h2>
+				<p>Back up your pricing or transfer it to another Roof Report installation.</p>
+			</div></div>
+			<div class="htr-cols">
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<h3>Export saved pricing</h3>
+					<p>Download roof types, service areas and pricing factors as JSON. Save pending edits first.</p>
+					<?php wp_nonce_field( 'htr_rr_export_pricing' ); ?>
+					<input type="hidden" name="action" value="htr_rr_export_pricing">
+					<?php submit_button( 'Export saved pricing', 'secondary', 'submit', false ); ?>
+				</form>
+				<form method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<h3>Import pricing</h3>
+					<p id="htr-pricing-import-help">Import replaces current pricing for future estimates. Export a backup first.</p>
+					<?php wp_nonce_field( 'htr_rr_import_pricing' ); ?>
+					<input type="hidden" name="action" value="htr_rr_import_pricing">
+					<input type="hidden" name="MAX_FILE_SIZE" value="<?php echo (int) self::PRICING_MAX_BYTES; ?>">
+					<div class="htr-transfer-file"><label for="htr-pricing-file">Pricing file <span>JSON · Up to 1 MB</span></label>
+					<input id="htr-pricing-file" type="file" name="pricing_file" accept=".json,application/json" aria-describedby="htr-pricing-import-help" required></div>
+					<label class="htr-transfer-confirm"><input type="checkbox" name="confirm_replace" value="1" required><span>Replace current pricing with this file.</span></label>
+					<?php submit_button( 'Import and replace pricing', 'secondary', 'submit', false ); ?>
+				</form>
+			</div>
+			<p class="description">Existing reports and integration settings stay unchanged. Images stay in the local Media Library; matching roof types keep their selected images.</p>
+		</section>
+		<?php
 	}
 
 	private static function pricing_material_row( $key, $material, $new = false ) {
@@ -391,6 +428,52 @@ class HTR_RR_Admin {
 	}
 
 	/* ---------------- Actions ---------------- */
+	public static function export_pricing() {
+		if ( ! current_user_can( self::CAP ) ) { wp_die( 'Not allowed', '', array( 'response' => 403 ) ); }
+		check_admin_referer( 'htr_rr_export_pricing' );
+		$json = wp_json_encode( HTR_RR_Settings::pricing_export(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES );
+		if ( false === $json ) {
+			self::pricing_transfer_error( 'Pricing could not be encoded. Review the saved pricing and try again.' );
+		}
+		nocache_headers();
+		header( 'Content-Type: application/json; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="htr-roof-report-pricing-' . gmdate( 'Y-m-d' ) . '.json"' );
+		header( 'X-Content-Type-Options: nosniff' );
+		echo $json; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON download.
+		exit;
+	}
+
+	public static function import_pricing() {
+		if ( ! current_user_can( self::CAP ) ) { wp_die( 'Not allowed', '', array( 'response' => 403 ) ); }
+		check_admin_referer( 'htr_rr_import_pricing' );
+		if ( '1' !== ( $_POST['confirm_replace'] ?? null ) ) {
+			self::pricing_transfer_error( 'Confirm replacement before importing pricing.' );
+		}
+		$file = $_FILES['pricing_file'] ?? array(); // phpcs:ignore
+		if ( is_array( $file ) && in_array( $file['error'] ?? null, array( UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE ), true ) ) {
+			self::pricing_transfer_error( 'The pricing file exceeds the upload limit. Choose a file no larger than 1 MB and check the server upload limit.' );
+		}
+		if ( ! is_array( $file ) || UPLOAD_ERR_OK !== ( $file['error'] ?? null ) || ! is_string( $file['tmp_name'] ?? null ) || ! is_uploaded_file( $file['tmp_name'] ) ) {
+			self::pricing_transfer_error( 'The file could not be uploaded. Choose a pricing JSON file and try again.' );
+		}
+		$json = file_get_contents( $file['tmp_name'], false, null, 0, self::PRICING_MAX_BYTES + 1 ); // phpcs:ignore
+		if ( false === $json ) { self::pricing_transfer_error( 'The uploaded file could not be read. Please try again.' ); }
+		if ( strlen( $json ) > self::PRICING_MAX_BYTES ) { self::pricing_transfer_error( 'The pricing file must be no larger than 1 MB.' ); }
+		// Accept UTF-8 BOMs added by some text editors.
+		$json = preg_replace( '/^\xEF\xBB\xBF/', '', $json );
+		$document = json_decode( $json, true, 32 );
+		if ( JSON_ERROR_NONE !== json_last_error() ) { self::pricing_transfer_error( 'The file is not valid JSON. Choose an original pricing export or correct the JSON syntax.' ); }
+		$pricing = HTR_RR_Settings::pricing_import( $document );
+		if ( is_wp_error( $pricing ) ) { self::pricing_transfer_error( $pricing->get_error_message() ); }
+		HTR_RR_Settings::save( $pricing );
+		wp_safe_redirect( admin_url( 'admin.php?page=htr-rr-pricing&msg=' . rawurlencode( 'Pricing imported successfully. Future estimates will use the imported settings.' ) ) );
+		exit;
+	}
+
+	private static function pricing_transfer_error( $message ) {
+		wp_die( esc_html( $message ), 'Pricing transfer failed', array( 'back_link' => true, 'response' => 400 ) );
+	}
+
 	public static function save() {
 		if ( ! current_user_can( self::CAP ) ) {
 			wp_die( 'Not allowed' );

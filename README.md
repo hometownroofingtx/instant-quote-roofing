@@ -60,6 +60,19 @@ Configure the workflow to authenticate the request and create or update the GHL 
 - Set the number of reports allowed per visitor per hour; the request handler enforces this using an IP-based hash.
 - Blank server-key and shared-secret fields retain their previously saved values.
 
+## Pricing export and import
+
+Open **Roof Reports > Pricing > Export / import pricing**.
+
+1. Save any pending pricing edits, then click **Export saved pricing** to download a JSON backup.
+2. To restore or transfer pricing, select an exported JSON file (maximum 1 MB), check **Replace current pricing with this file**, and click **Import and replace pricing**.
+
+Import replaces roof types (including custom keys), service areas, service radius, waste, pitch bands, and complexity factors. Export a backup first. The entire document is validated before saving; an invalid or unsupported file leaves settings unchanged. Only administrators with `manage_options` can export or import, and both actions require a valid WordPress nonce.
+
+If an import fails, the error identifies the section to fix. Radius and roof-face limits must be whole numbers, pitch limits must be unique, and all built-in roof types must remain in the file. JSON numbers must be numbers rather than quoted strings. UTF-8 files with a byte-order mark are accepted.
+
+API keys, webhook credentials, customer text, and existing reports are not included or changed. Media files and attachment IDs are not transferred: matching roof types retain their destination-site images, and new roof types use the default image fallback until you choose an image locally. Imported pricing applies to future estimates. The format is `htr-rr-pricing`, version `1`.
+
 ## Customer experience
 
 The customer enters an address, confirms the property on a satellite map, chooses a roof type, provides contact details and consent selections, and receives a report with measurements or an explanation that review is needed.

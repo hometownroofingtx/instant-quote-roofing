@@ -10,6 +10,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class HTR_RR_Settings {
 	const OPTION = 'htr_rr_settings';
+	const PRICING_FORMAT = 'htr-rr-pricing';
+	const PRICING_VERSION = 1;
 
 	public static function defaults() {
 		return array(
@@ -85,6 +87,87 @@ class HTR_RR_Settings {
 
 	public static function save( array $values ) {
 		update_option( self::OPTION, array_merge( self::all(), $values ), false );
+	}
+
+	/** Export only portable pricing settings, without credentials or local media IDs. */
+	public static function pricing_export() {
+		$settings = self::all();
+		$pricing = array_intersect_key( $settings, array_flip( array( 'materials', 'areas', 'service_radius_mi', 'waste_pct', 'pitch_bands', 'complexity' ) ) );
+		foreach ( $pricing['materials'] as $key => $material ) {
+			$pricing['materials'][ $key ] = array_intersect_key( $material, array_flip( array( 'label', 'low', 'high', 'quote' ) ) );
+		}
+		return array( 'format' => self::PRICING_FORMAT, 'version' => self::PRICING_VERSION, 'pricing' => $pricing );
+	}
+
+	/** Validate the entire portable document before any option is updated. Images stay local. */
+	public static function pricing_import( $document ) {
+		if ( ! is_array( $document ) || self::PRICING_FORMAT !== ( $document['format'] ?? null ) || self::PRICING_VERSION !== ( $document['version'] ?? null ) || ! is_array( $document['pricing'] ?? null ) ) {
+			return new WP_Error( 'pricing_import', 'Choose a version 1 HTR Roof Report pricing export.' );
+		}
+		$p = $document['pricing'];
+		foreach ( array( 'materials', 'areas', 'pitch_bands', 'complexity' ) as $key ) {
+			if ( ! is_array( $p[ $key ] ?? null ) || ! $p[ $key ] ) {
+				return new WP_Error( 'pricing_import', 'The pricing file is missing a populated section: ' . $key . '.' );
+			}
+		}
+		if ( ! self::pricing_number( $p['waste_pct'] ?? null, 0, 50 ) || ! self::pricing_number( $p['service_radius_mi'] ?? null, 5, 300, true ) ) {
+			return new WP_Error( 'pricing_import', 'Waste must be between 0 and 50 percent; service radius must be a whole number between 5 and 300 miles.' );
+		}
+		$current = self::all();
+		$materials = array();
+		foreach ( $p['materials'] as $key => $row ) {
+			if ( ! is_string( $key ) || ! preg_match( '/^[a-z0-9_-]{1,32}$/D', $key ) || ! is_array( $row ) || ! self::pricing_number( $row['low'] ?? null, 0, PHP_FLOAT_MAX ) || ! self::pricing_number( $row['high'] ?? null, $row['low'], PHP_FLOAT_MAX ) || ! in_array( $row['quote'] ?? null, array( 0, 1 ), true ) ) {
+				return new WP_Error( 'pricing_import', 'Each roof type needs a valid key, nonnegative rates with high at least low, and a Show price value of 0 or 1.' );
+			}
+			unset( $row['image_id'] );
+			$clean = self::material_row( $row, $current['materials'][ $key ] ?? array() );
+			if ( is_wp_error( $clean ) ) { return $clean; }
+			$materials[ $key ] = $clean;
+		}
+		// Default identities are always retained by all(); require them for an exact restore.
+		if ( array_diff_key( self::defaults()['materials'], $materials ) ) {
+			return new WP_Error( 'pricing_import', 'The pricing file must include all built-in roof types.' );
+		}
+		foreach ( $p['areas'] as $row ) {
+			if ( ! is_array( $row ) || ! is_string( $row['town'] ?? null ) || '' === trim( sanitize_text_field( $row['town'] ) ) || ! self::pricing_number( $row['lat'] ?? null, -90, 90 ) || ! self::pricing_number( $row['lng'] ?? null, -180, 180 ) || ! self::pricing_number( $row['mult'] ?? null, 0.5, 2 ) ) {
+				return new WP_Error( 'pricing_import', 'Each service area needs a town, valid coordinates, and a multiplier between 0.5 and 2.' );
+			}
+		}
+		$rows = self::pricing_rows( array( 'ar' => $p['areas'] ), $current );
+		if ( is_wp_error( $rows ) ) { return $rows; }
+		$bands = array();
+		$thresholds = array();
+		foreach ( $p['pitch_bands'] as $row ) {
+			if ( ! is_array( $row ) || ! self::pricing_number( $row['max'] ?? null, 1, 99, true ) || ! self::pricing_number( $row['mult'] ?? null, 0.5, 3 ) ) {
+				return new WP_Error( 'pricing_import', 'Pitch limits must be whole numbers between 1 and 99 with multipliers between 0.5 and 3.' );
+			}
+			if ( isset( $thresholds[ (int) $row['max'] ] ) ) {
+				return new WP_Error( 'pricing_import', 'Pitch bands must have distinct limits.' );
+			}
+			$thresholds[ (int) $row['max'] ] = true;
+			$bands[] = array( 'max' => (int) $row['max'], 'mult' => round( $row['mult'], 2 ) );
+		}
+		usort( $bands, function ( $a, $b ) { return $a['max'] <=> $b['max']; } );
+		$cx = array();
+		foreach ( array( 'simple_max', 'medium_max', 'simple', 'medium', 'complex' ) as $key ) {
+			$is_max = in_array( $key, array( 'simple_max', 'medium_max' ), true );
+			if ( ! self::pricing_number( $p['complexity'][ $key ] ?? null, $is_max ? 1 : 0.01, $is_max ? PHP_INT_MAX - 1 : PHP_FLOAT_MAX, $is_max ) ) {
+				return new WP_Error( 'pricing_import', 'Complexity needs positive whole-number face limits and positive multipliers.' );
+			}
+			$cx[ $key ] = $is_max ? (int) $p['complexity'][ $key ] : round( $p['complexity'][ $key ], 2 );
+		}
+		if ( $cx['medium_max'] <= $cx['simple_max'] ) {
+			return new WP_Error( 'pricing_import', 'The medium complexity face limit must exceed the simple limit.' );
+		}
+		return array( 'materials' => $materials, 'areas' => $rows['areas'], 'waste_pct' => round( $p['waste_pct'], 1 ), 'service_radius_mi' => (int) $p['service_radius_mi'], 'pitch_bands' => $bands, 'complexity' => $cx );
+	}
+
+	/** JSON numbers only: reject numeric strings, booleans, fractions in integer fields, and infinity. */
+	private static function pricing_number( $value, $min, $max, $integer = false ) {
+		return ( is_int( $value ) || is_float( $value ) )
+			&& is_finite( (float) $value )
+			&& $value >= $min && $value <= $max
+			&& ( ! $integer || floor( $value ) == $value );
 	}
 
 	/** Sanitize editable pricing rows without changing existing material identities. */

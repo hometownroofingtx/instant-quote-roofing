@@ -266,3 +266,21 @@
 .htr-rr-admin .htr-settings-save{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:18px 0}.htr-rr-admin .htr-settings-save .button{min-height:40px;padding:4px 18px;font-size:13px}.htr-rr-admin .htr-settings-save>span{font-size:12px;color:#61758a}
 .htr-rr-admin .htr-settings-test{padding:20px;margin-top:4px}.htr-rr-admin .htr-settings-test .htr-box-heading h2{font-size:16px}.htr-rr-admin .htr-settings-test .htr-box-heading p{font-size:12px}.htr-rr-admin .htr-settings-test form{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px}.htr-rr-admin .htr-settings-test label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#536b82}.htr-rr-admin .htr-settings-test input:not([type=hidden]):not([type=submit]){box-sizing:border-box;width:210px;max-width:100%;min-height:40px;padding:7px 10px;border-color:#cdd6e1;border-radius:6px;font-size:13px}.htr-rr-admin .htr-settings-test input[type=submit]{min-height:40px;padding:4px 14px}
 @media(max-width:1000px){.htr-rr-admin .htr-settings-grid{grid-template-columns:1fr}}@media(max-width:600px){.htr-rr-admin .htr-settings-card,.htr-rr-admin .htr-settings-limit,.htr-rr-admin .htr-settings-test{padding:16px}.htr-rr-admin .htr-settings-test label{flex:1 1 100%}.htr-rr-admin .htr-settings-test input:not([type=hidden]):not([type=submit]){width:100%}.htr-rr-admin .htr-settings-limit label{flex-wrap:wrap}}
+.htr-rr-admin .htr-pricing-transfer{margin-top:20px}
+.htr-rr-admin .htr-pricing-transfer .htr-cols{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:16px}
+.htr-rr-admin .htr-pricing-transfer form{min-width:0;margin:0;padding:20px;border:1px solid #e0e5ec;border-radius:8px;background:#f8fafc}
+.htr-rr-admin .htr-pricing-transfer h3{margin:0 0 8px;color:#19344e;font-size:14px;font-weight:600;line-height:1.4}
+.htr-rr-admin .htr-pricing-transfer form>p{margin:0 0 18px;color:#61758a;font-size:12px;line-height:1.6}
+.htr-rr-admin .htr-transfer-file{margin-bottom:16px}
+.htr-rr-admin .htr-transfer-file>label{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;margin-bottom:8px;color:#334b62;font-size:12px;font-weight:600}
+.htr-rr-admin .htr-transfer-file>label span{color:#61758a;font-size:11px;font-weight:400}
+.htr-rr-admin .htr-pricing-transfer input[type=file]{box-sizing:border-box;display:block;width:100%;max-width:100%;margin:0;padding:8px;border:1px solid #cdd6e1;border-radius:6px;background:#fff;color:#536b82;font-size:12px;line-height:1.5}
+.htr-rr-admin .htr-pricing-transfer input[type=file]::file-selector-button{margin-right:10px;padding:6px 10px;border:1px solid #cdd6e1;border-radius:4px;background:#f3f6fa;color:#19344e;font:inherit;cursor:pointer}
+.htr-rr-admin .htr-pricing-transfer input[type=file]::file-selector-button:hover{background:#e8eef5}
+.htr-rr-admin .htr-transfer-confirm{display:flex;align-items:flex-start;gap:8px;margin:0 0 18px;color:#435a70;font-size:12px;line-height:1.6;cursor:pointer}
+.htr-rr-admin .htr-transfer-confirm input[type=checkbox]{flex:0 0 auto;margin:2px 0 0}
+.htr-rr-admin .htr-pricing-transfer .button{min-height:36px;max-width:100%;padding:2px 14px;border-color:#b9cbdc;background:#fff;color:#24649d;font-size:12px;white-space:normal}
+.htr-rr-admin .htr-pricing-transfer .button:hover{border-color:#24649d;background:#edf4fc;color:#19344e}
+.htr-rr-admin .htr-pricing-transfer input[type=file]:focus-visible{outline:2px solid #2271b1;outline-offset:2px}
+.htr-rr-admin .htr-pricing-transfer>.description{margin:14px 0 0;color:#61758a;font-size:11px;line-height:1.6}
+@media(max-width:780px){.htr-rr-admin .htr-pricing-transfer .htr-cols{grid-template-columns:1fr}}
