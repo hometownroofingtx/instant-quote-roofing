@@ -62,7 +62,15 @@ class HTR_RR_Admin {
 	}
 
 	private static function pagination( array $state, array $args ) {
-		echo '<div class="htr-pagination"><span>' . esc_html( number_format_i18n( $state['total'] ) . ' items' ) . '</span>';
+		$first = $state['total'] > 0 ? $state['offset'] + 1 : 0;
+		$last = min( $state['offset'] + $state['per_page'], $state['total'] );
+		$summary = sprintf(
+			'Showing %s–%s of %s items',
+			number_format_i18n( $first ),
+			number_format_i18n( $last ),
+			number_format_i18n( $state['total'] )
+		);
+		echo '<div class="htr-pagination"><span>' . esc_html( $summary ) . '</span>';
 		if ( $state['pages'] > 1 ) {
 			$base = add_query_arg( array_merge( $args, array( 'paged' => '%#%' ) ), admin_url( 'admin.php' ) );
 			$base = str_replace( '%25%23%25', '%#%', $base );
