@@ -272,3 +272,17 @@ The frontend GHL flow uses `draft_prepare` / `calculator_draft_prepare` to prepa
 The form's hidden `htr_report_id` carries a `draft-<token>` reference until submission. The authenticated `link_contact` endpoint accepts this reference too, if an optional workflow is still in use; pass the value unchanged rather than coercing it to an integer. Legacy `prepare` endpoints remain available for older integrations, while the current frontend uses the draft endpoints. Public report links become available after finalization, and the page reports any failure to save the submitted contact.
 ### Instant Roof Quote design
 Roof Reports > Settings > Instant Roof Quote Design controls the six progress labels, step headings and descriptions, navigation and report action labels, analysis checklist, property illustration, sidebar photo and sidebar copy. Roof material photos remain in Pricing; GHL fields and its internal form appearance remain managed in GHL. The sidebar stacks beneath the quote on smaller screens. Design settings use the existing option, validate image attachments, and preserve absent values during partial updates.
+
+## Standalone form embed (same origin)
+
+The form-only page is `/?htr_rr_embed=report`. It renders the existing Instant Roof Quote without the theme header/footer or quote sidebar, independently of floating-tab enablement and drawer settings. LeadConnector chatbot scripts are dequeued on embed requests; the GHL contact form and regular website chat are unaffected.
+
+Open `/?htr_rr_embed_demo=1` for a working iframe example, form-only link and copyable same-site HTML. The demo validates message origin and iframe source before applying automatic height updates. A copied fixed-height iframe can be used on another page of the same origin:
+
+```html
+<iframe src="https://YOUR-DOMAIN.com/?htr_rr_embed=report"
+  title="Instant Roof Quote" width="100%" height="850"
+  style="border:0" allow="geolocation"></iframe>
+```
+
+These pages are noindex and send `X-Frame-Options: SAMEORIGIN` plus `frame-ancestors 'self'`. External domains remain blocked; third-party allowlisting and source tracking are not implemented. Deploying the code does not change Google/GHL settings or enable external embedding. Validate the complete submission on the deployed site separately.

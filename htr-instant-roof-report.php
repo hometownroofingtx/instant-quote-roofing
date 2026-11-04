@@ -29,6 +29,8 @@ require_once HTR_RR_DIR . 'includes/class-report-page.php';
 require_once HTR_RR_DIR . 'includes/class-admin.php';
 require_once HTR_RR_DIR . 'includes/class-floating-tab.php';
 HTR_RR_Floating_Tab::init();
+require_once HTR_RR_DIR . 'includes/class-embed.php';
+HTR_RR_Embed::init();
 if ( is_admin() ) {
 	require_once HTR_RR_DIR . 'includes/class-floating-admin.php';
 	HTR_RR_Floating_Admin::init();
