@@ -9,7 +9,7 @@ foreach ( array( 'roof_heading' => array( 'Step 1: Roof Details', 'Step 1: Roof 
 $sidebar = $design['sidebar'] ? wp_get_attachment_image_url( $design['sidebar'], 'large' ) : '';
 ?>
 <div class="htr-rr htr-rr-calculator" data-htr-calculator>
- <div class="htr-rr-calc-layout"><div class="htr-estimate-main"><ol class="htr-estimate-steps" aria-label="Estimate progress"><?php foreach ( array( 1 => 'Roof Type', 2 => 'Address', 3 => ( $ghl_mode ? 'GHL Form' : 'Contact Information' ), 4 => 'Your Estimate' ) as $step => $label ) : ?><li data-calc-progress="<?php echo (int) $step; ?>" <?php echo 1 === $step ? 'aria-current="step"' : ''; ?>><span><?php echo (int) $step; ?></span><?php echo esc_html( $label ); ?></li><?php endforeach; ?></ol>
+ <div class="htr-rr-calc-layout"><div class="htr-estimate-main"><ol class="htr-estimate-steps" aria-label="Estimate progress"><?php foreach ( array( 1 => 'Roof Type', 2 => 'Address', 3 => 'Contact Details', 4 => 'Your Estimate' ) as $step => $label ) : ?><li data-calc-progress="<?php echo (int) $step; ?>" <?php echo 1 === $step ? 'aria-current="step"' : ''; ?>><span><?php echo (int) $step; ?></span><?php echo esc_html( $label ); ?></li><?php endforeach; ?></ol>
   <section class="htr-rr-card">
    <div data-calc-stage="1" tabindex="-1"><h3><?php echo esc_html( $design['roof_heading'] ); ?></h3><p class="htr-rr-sub"><?php echo esc_html( $design['roof_description'] ); ?></p>
    <form data-calc-inputs>
