@@ -168,6 +168,32 @@
 .htr-rr-admin .htr-report-table .htr-cell-sub{font-size:13px;color:#52677c}
 .htr-rr-admin .htr-report-table .htr-date{font-size:12px}
 .htr-rr-admin .htr-report-table .htr-view-link{font-size:13px;min-height:34px}
+.htr-rr-admin .htr-report-row-actions{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.htr-rr-admin .htr-report-table .htr-report-download{margin:0;gap:5px}
+.htr-rr-admin .htr-reports-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:4px 0 18px;padding:5px;border:1px solid #dfe5ec;border-radius:9px;background:#fff}
+.htr-rr-admin .htr-reports-toolbar .htr-status-filters{flex:1 1 auto;width:auto;min-width:0;margin:0;padding:0;border:0;background:transparent}
+.htr-rr-admin .htr-reports-export{display:flex;flex:0 0 auto;align-items:center;margin:0}
+.htr-rr-admin .htr-reports-export .button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;margin:0;padding:4px 12px;font-size:12px;line-height:1.5}
+.htr-rr-admin .htr-report-download .dashicons,.htr-rr-admin .htr-reports-export .dashicons{display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;width:16px;height:16px;margin:0;font-size:16px;line-height:1}
+@media(max-width:782px){
+ .htr-rr-admin .htr-reports-toolbar{gap:10px;padding:10px}
+ .htr-rr-admin .htr-reports-toolbar .htr-status-filters{flex:1 1 100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+ .htr-rr-admin .htr-reports-toolbar .htr-status-filter{justify-content:center;min-height:40px;padding:7px 6px}
+ .htr-rr-admin .htr-reports-export,.htr-rr-admin .htr-reports-export .button{width:100%}
+ .htr-rr-admin .htr-reports-export .button{min-height:40px;white-space:normal;text-align:center}
+ .htr-rr-admin .htr-report-table-wrap{border:0;background:transparent;overflow:visible}
+ .htr-rr-admin .htr-report-table{display:block;min-width:0;width:100%;background:transparent}
+ .htr-rr-admin .htr-report-table thead{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+ .htr-rr-admin .htr-report-table tbody{display:block}
+ .htr-rr-admin .htr-report-table tbody tr{display:block;margin-bottom:12px;padding:8px 14px;border:1px solid #e0e5ec;border-radius:9px;background:#fff}
+ .htr-rr-admin .htr-report-table td{display:grid;grid-template-columns:100px minmax(0,1fr);align-items:start;gap:4px 12px;min-width:0;padding:12px 0;border-top:0;overflow-wrap:anywhere}
+ .htr-rr-admin .htr-report-table td::before{content:attr(data-label);grid-column:1;grid-row:1 / span 3;color:#61758a;font-size:12px;font-weight:500}
+ .htr-rr-admin .htr-report-table td>*{grid-column:2;min-width:0}
+ .htr-rr-admin .htr-report-table td:last-child{border-bottom:0}
+ .htr-rr-admin .htr-report-table .htr-pill{justify-self:start}
+ .htr-rr-admin .htr-report-row-actions{flex-wrap:wrap;white-space:normal}
+ .htr-rr-admin .htr-report-table .htr-view-link{min-height:38px}
+}
 
 /* Roof-type media controls. */
 .htr-rr-admin .htr-material-pricing-table{min-width:680px}
@@ -212,7 +238,7 @@
 .htr-rr-admin .htr-detail-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:14px 0 20px}.htr-rr-admin .htr-detail-actions .button{min-height:38px;padding:3px 14px;font-size:13px}.htr-rr-admin .htr-detail-back{margin-right:auto;font-size:13px;text-decoration:none}
 .htr-rr-admin .htr-detail-summary{display:grid;grid-template-columns:1fr 1fr 1.4fr 1.2fr;gap:16px;padding:20px;margin-bottom:18px;border:1px solid #dfe5ec;border-radius:10px;background:#fff}.htr-rr-admin .htr-detail-summary>div{display:flex;flex-direction:column;align-items:flex-start;gap:9px;min-width:0}.htr-rr-admin .htr-detail-summary>div>span:first-child{color:#61758a;font-size:12px}.htr-rr-admin .htr-detail-summary strong{font-size:22px;font-weight:600;color:#193f60;font-variant-numeric:tabular-nums;line-height:1.4}.htr-rr-admin .htr-detail-summary .htr-detail-created{font-size:14px;padding-top:3px}
 .htr-rr-admin .htr-detail-alert{display:flex;gap:12px;align-items:flex-start;margin-bottom:18px;padding:14px 18px;border:1px solid #efdfb6;border-radius:8px;background:#fff9ed;color:#815f20;font-size:13px}.htr-rr-admin .htr-detail-alert .dashicons{margin-top:2px;flex-shrink:0}.htr-rr-admin .htr-detail-alert p{margin:4px 0 0;font-size:13px;line-height:1.6}
-.htr-rr-admin .htr-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:18px;margin-bottom:18px}.htr-rr-admin .htr-detail-card{padding:20px}.htr-rr-admin .htr-detail-card h2{font-size:16px;margin-bottom:14px}
+.htr-rr-admin .htr-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:18px;margin-bottom:18px}.htr-rr-admin .htr-detail-card{padding:20px}.htr-rr-admin .htr-detail-card h2{font-size:16px;margin-bottom:14px}
 .htr-rr-admin .htr-detail-list{margin:0}.htr-rr-admin .htr-detail-list>div{display:grid;grid-template-columns:minmax(115px,.7fr) minmax(0,1.3fr);gap:16px;padding:10px 0;border-bottom:1px solid #edf1f5;line-height:1.6}.htr-rr-admin .htr-detail-list>div:last-child{border:0}.htr-rr-admin .htr-detail-list dt{color:#61758a;font-size:12px}.htr-rr-admin .htr-detail-list dd{margin:0;color:#304b64;font-size:13px;font-weight:500;overflow-wrap:anywhere}.htr-rr-admin .htr-detail-muted{color:#7b8b9a;font-weight:400}
 .htr-rr-admin .htr-detail-delivery-error{margin-top:12px;padding:12px 14px;border:1px solid #efdad5;border-radius:7px;background:#fff6f3;color:#a04436;font-size:12px}.htr-rr-admin .htr-detail-delivery-error p{margin:5px 0 0;font-size:13px;overflow-wrap:anywhere}.htr-rr-admin .htr-detail-note{margin:14px 0 0;color:#61758a;font-size:12px;line-height:1.7}
 .htr-rr-admin .htr-detail-estimate{padding:20px;margin-bottom:18px}.htr-rr-admin .htr-detail-estimate .htr-box-heading{margin-bottom:14px}.htr-rr-admin .htr-detail-estimate-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0}.htr-rr-admin .htr-detail-estimate-grid>div{padding:13px;background:#f6f9fc;border:1px solid #e6ecf3;border-radius:7px}.htr-rr-admin .htr-detail-estimate-grid dt{font-size:11px;color:#61758a;line-height:1.6}.htr-rr-admin .htr-detail-estimate-grid dd{margin:7px 0 0;color:#234763;font-size:16px;font-weight:600;overflow-wrap:anywhere}

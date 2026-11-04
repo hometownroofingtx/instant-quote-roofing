@@ -201,6 +201,9 @@
         status.textContent = 'Your request has been saved. Our team will confirm your roof measurements and estimate.';
         $('[data-calc-contact]').hidden = true;
         result.insertAdjacentHTML('beforeend', '<p class="htr-rr-sub">Your request has been saved. Our team will follow up to confirm your estimate.</p>');
+        if (j.report && j.report.url) {
+          result.insertAdjacentHTML('beforeend', '<div class="htr-rr-actions"><a class="htr-rr-btn" href="' + esc(j.report.url) + '&print=1" target="_blank" rel="noopener" aria-describedby="htr-rr-calc-download-help">Download report (PDF)</a></div><p class="htr-rr-note" id="htr-rr-calc-download-help">Opens your report in a new tab. Choose Save as PDF in the print dialog to download a copy.</p>');
+        }
         Array.prototype.forEach.call(lead.elements, function (el) { el.disabled = true; });
       } catch (err) { status.textContent = err.message; btn.disabled = false; Array.prototype.forEach.call(inputs.elements, function (el) { el.disabled = false; }); }
     });
@@ -340,10 +343,10 @@
       h += '<div class="htr-rr-alert">We could not measure this roof from aerial imagery. Our team has your details and will contact you to measure it in person, free of charge.</div>';
     }
     h += '<div class="htr-rr-actions">' +
-      '<a class="htr-rr-btn" href="' + esc(r.url) + '&print=1" target="_blank" rel="noopener">Download PDF report</a>' +
+      '<a class="htr-rr-btn" href="' + esc(r.url) + '&print=1" target="_blank" rel="noopener" aria-describedby="htr-rr-download-help">Download report (PDF)</a>' +
       '<button type="button" class="htr-rr-btn htr-rr-btn--ghost" id="htr-rr-mail">Email me a copy</button>' +
       '<a class="htr-rr-btn htr-rr-btn--ghost" href="' + esc(r.url) + '" target="_blank" rel="noopener">View full details online</a>' +
-      '</div><p class="htr-rr-msg" id="htr-rr-mailmsg" aria-live="polite"></p>' +
+      '</div><p class="htr-rr-note" id="htr-rr-download-help">Opens your report in a new tab. Choose Save as PDF in the print dialog to download a copy.</p><p class="htr-rr-msg" id="htr-rr-mailmsg" aria-live="polite"></p>' +
       '<div class="htr-rr-next"><h4>Next steps</h4><ul><li><b>Schedule a free inspection</b>: we confirm the measurements and give you a final quote.</li>' +
       (C.phone ? '<li><b>Call us</b>: <a href="tel:' + esc(C.phone.replace(/[^0-9+]/g, '')) + '">' + esc(C.phone) + '</a></li>' : '') +
       '<li><b>Financing</b>: flexible options for qualified homeowners.</li></ul></div>' +

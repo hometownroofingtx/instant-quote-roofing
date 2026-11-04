@@ -3,7 +3,7 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
-$print = ! empty( $_GET['print'] ); // phpcs:ignore WordPress.Security.NonceVerification
+$print = isset( $_GET['print'] ) && '1' === $_GET['print']; // phpcs:ignore WordPress.Security.NonceVerification
 $logo  = HTR_RR_URL . 'assets/img/logo.png';
 $m     = array( 'HTR_RR_Report_Page', 'money' );
 ?><!doctype html>
@@ -22,11 +22,12 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px
 .img{width:100%;border-radius:10px;margin-top:8px}
 .dg{display:grid;grid-template-columns:1fr 1fr;gap:14px}.dg svg{width:100%;height:auto;background:#f7f9fc;border-radius:8px}.dg text{font:12px Arial,sans-serif;fill:#1d2433}.dg .dim{fill:#5b6475;font-size:11px}
 @media (max-width:640px){.dg{grid-template-columns:1fr}}.note{color:#5b6475;font-size:13px}.warn{background:#fff8e6;border:1px solid #f1d48a;border-radius:10px;padding:10px 12px}
-.bar{max-width:860px;margin:16px auto 0;display:flex;gap:10px;justify-content:flex-end}.bar button{background:#d6202b;color:#fff;border:0;border-radius:8px;padding:10px 16px;font:inherit;font-weight:700;cursor:pointer}
-@media print{body{background:#fff}.pg{box-shadow:none;margin:0;max-width:none;border-radius:0;padding:0}.bar{display:none}}
+.bar{max-width:860px;margin:16px auto 0;padding:0 16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}.bar p{margin:0;flex:1 1 260px;font-size:13px;color:#5b6475}.bar button{background:#d6202b;color:#fff;border:0;border-radius:8px;padding:10px 16px;font:inherit;font-weight:700;cursor:pointer}.bar button:focus-visible{outline:3px solid #2271b1;outline-offset:3px}
+@page{margin:15mm}
 @media (max-width:640px){.g{grid-template-columns:repeat(2,1fr)}.pg{padding:18px;margin:0;border-radius:0}}
+@media print{body{background:#fff;font-size:11pt}.pg{box-shadow:none;margin:0;max-width:none;border-radius:0;padding:0}.bar{display:none}.hd,.g,.price,.warn,.dg,tr{break-inside:avoid}.hd img{max-width:160px;height:auto}h2{break-after:avoid}p{orphans:3;widows:3}.g{grid-template-columns:repeat(4,minmax(0,1fr))}.t b{font-size:16px}.dg{grid-template-columns:1fr 1fr}thead{display:table-header-group}th{background:#f4f7fb;color:#0b2d4f}.img{display:block;max-height:85mm;object-fit:contain;break-inside:avoid}}
 </style></head><body>
-<div class="bar"><button type="button" onclick="window.print()">Download PDF / Print</button></div>
+<div class="bar"><p id="htr-download-help">Choose <strong>Save as PDF</strong> in the print dialog to download your report.</p><button id="htr-download-report" type="button" aria-describedby="htr-download-help">Download report</button></div>
 <div class="pg">
 	<div class="hd">
 		<div><h1>Roof Measurement Report</h1><p><?php echo esc_html( $v['address'] ); ?></p><p>Prepared <?php echo esc_html( wp_date( 'M j, Y', strtotime( $v['createdAt'] . ' UTC' ) ) ); ?> for <?php echo esc_html( $v['firstName'] ); ?></p></div>
@@ -77,7 +78,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px
 		<script type="application/json" id="htr-rr-diagram-data"><?php echo wp_json_encode( array( 'lat' => $v['lat'], 'lng' => $v['lng'], 'pitch' => $v['pitch'], 'faces' => $v['faces'], 'facesDetail' => $v['facesDetail'], 'buildingBox' => $v['buildingBox'] ) ); ?></script>
 		<script src="<?php echo esc_url( HTR_RR_URL . 'assets/js/roof-diagram.js?ver=' . HTR_RR_VERSION ); ?>"></script>
 		<h2>Roof faces measured</h2>
-		<table><tr><th>#</th><th>Area (sq ft)</th><th>Pitch</th></tr>
+		<table><thead><tr><th scope="col">#</th><th scope="col">Area (sq ft)</th><th scope="col">Pitch</th></tr></thead><tbody>
 		<?php
 		$i = 0;
 		foreach ( $v['facesDetail'] as $f ) :
@@ -85,7 +86,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px
 			?>
 			<tr><td><?php echo (int) $i; ?></td><td><?php echo esc_html( number_format( $f['area'] ) ); ?></td><td><?php echo esc_html( $f['pitch'] . '/12' ); ?></td></tr>
 		<?php endforeach; ?>
-		</table>
+		</tbody></table>
 		<?php endif; ?>
 		<p class="note">Measured from Google aerial imagery<?php echo $v['imageryDate'] ? ' taken ' . esc_html( substr( $v['imageryDate'], 0, 7 ) ) : ''; ?> (detail level: <?php echo esc_html( strtolower( $v['imageryQuality'] ) ); ?>). Ridge, hip, valley and eave lengths are measured during your free inspection.</p>
 	<?php else : ?>
@@ -96,5 +97,15 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px
 	<p>Schedule your free inspection so we can confirm these measurements and give you a final quote<?php echo $v['phone'] ? ': call <b>' . esc_html( $v['phone'] ) . '</b>' : ''; ?>.</p>
 	<p class="note"><?php echo esc_html( $v['disclaimer'] ); ?></p>
 </div>
-<?php if ( $print ) : ?><script>window.addEventListener('load',function(){setTimeout(function(){window.print();},600);});</script><?php endif; ?>
+<script>
+(function () {
+    'use strict';
+    function downloadReport() { window.print(); }
+    document.getElementById('htr-download-report').addEventListener('click', downloadReport);
+    <?php if ( $print ) : ?>
+    // Load includes the logo, aerial image and diagram script; allow layout to finish before printing.
+    window.addEventListener('load', function () { window.setTimeout(downloadReport, 600); });
+    <?php endif; ?>
+})();
+</script>
 </body></html>

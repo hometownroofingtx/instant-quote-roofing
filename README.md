@@ -85,6 +85,14 @@ https://your-site.example/?htr_roof_report=<token>
 
 The standalone report supports printing or saving as PDF through the browser. It sends no-cache headers and a `noindex, nofollow` robots header. Anyone with the report link can open it; share it with the intended recipient.
 
+Customers can select **Download report (PDF)** on the results screen to open the report in a new tab and launch the print dialog. Choose **Save as PDF** to save a copy. The standalone report also has a **Download report** button for opening the dialog again. The print layout hides the toolbar, repeats roof-face table headers on subsequent pages, and keeps measurement cards and diagrams together where space permits. The browser controls the PDF filename and save destination; this is a browser PDF workflow rather than a server-generated attachment.
+
+The calculator also displays **Download report (PDF)** after the customer successfully submits their details and the estimate is saved.
+
+Administrators can select **Download report** beside **View** in the Reports table or from the report detail page's action bar. The Overview's recent reports use the same table action. Each opens the matching customer report's print dialog; choose **Save as PDF** to download it.
+
+Use **Download overall report (CSV)** above the Reports table to export all reports across every status, including records beyond the newest 200 displayed. This administrator-only, nonce-protected spreadsheet contains customer/contact details, property information, measurements, estimate ranges, and lead delivery status. It excludes report access tokens, integration secrets, and raw measurement payloads. Rows are read in batches, and spreadsheet formula prefixes in customer-entered values are escaped. The current table status filter does not restrict the overall export.
+
 ## Admin pages
 
 All Roof Reports admin pages require the `manage_options` capability.

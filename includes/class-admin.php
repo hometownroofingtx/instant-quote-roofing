@@ -15,6 +15,7 @@ class HTR_RR_Admin {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
 		add_action( 'admin_post_htr_rr_save', array( __CLASS__, 'save' ) );
 		add_action( 'admin_post_htr_rr_export_pricing', array( __CLASS__, 'export_pricing' ) );
+		add_action( 'admin_post_htr_rr_export_reports', array( __CLASS__, 'export_reports' ) );
 		add_action( 'admin_post_htr_rr_import_pricing', array( __CLASS__, 'import_pricing' ) );
 		add_action( 'admin_post_htr_rr_resend', array( __CLASS__, 'resend' ) );
 		add_action( 'admin_post_htr_rr_test_solar', array( __CLASS__, 'test_solar' ) );
@@ -135,9 +136,15 @@ class HTR_RR_Admin {
 		echo '<div class="htr-report-table-wrap"><table class="widefat htr-report-table"><thead><tr><th scope="col">Report</th><th scope="col">Customer &amp; property</th><th scope="col">Roof</th><th scope="col">Estimate</th><th scope="col">Report status</th><th scope="col">GHL delivery</th><th scope="col"><span class="screen-reader-text">Actions</span></th></tr></thead><tbody>';
 		foreach ( $rows as $r ) {
 			$est = null !== $r['price_low'] ? '$' . number_format( $r['price_low'] ) . ' – $' . number_format( $r['price_high'] ) : '—';
-			echo '<tr><td><strong>#' . (int) $r['id'] . '</strong><span class="htr-cell-sub htr-date">' . esc_html( $r['created_at'] ) . ' UTC</span></td><td class="htr-property"><strong>' . esc_html( $r['first_name'] . ' ' . $r['last_name'] ) . '</strong><span class="htr-cell-sub">' . esc_html( $r['address'] ) . '</span></td><td><span class="htr-material">' . esc_html( $r['material'] ) . '</span><span class="htr-cell-sub">' . ( null !== $r['area_sqft'] ? esc_html( number_format( $r['area_sqft'] ) ) . ' sq ft' : '—' ) . '</span></td><td class="htr-estimate">' . esc_html( $est ) . '</td><td>' . self::status_pill( $r['status'] ) . '</td><td>' . self::status_pill( $r['lead_status'] ) . '</td><td><a class="htr-view-link" href="' . esc_url( admin_url( 'admin.php?page=htr-rr-reports&view=' . (int) $r['id'] ) ) . '" aria-label="View report ' . (int) $r['id'] . '">View &rarr;</a></td></tr>'; // phpcs:ignore
+			echo '<tr><td data-label="Report"><strong>#' . (int) $r['id'] . '</strong><span class="htr-cell-sub htr-date">' . esc_html( $r['created_at'] ) . ' UTC</span></td><td class="htr-property" data-label="Customer &amp; property"><strong>' . esc_html( $r['first_name'] . ' ' . $r['last_name'] ) . '</strong><span class="htr-cell-sub">' . esc_html( $r['address'] ) . '</span></td><td data-label="Roof"><span class="htr-material">' . esc_html( $r['material'] ) . '</span><span class="htr-cell-sub">' . ( null !== $r['area_sqft'] ? esc_html( number_format( $r['area_sqft'] ) ) . ' sq ft' : '—' ) . '</span></td><td class="htr-estimate" data-label="Estimate">' . esc_html( $est ) . '</td><td data-label="Report status">' . self::status_pill( $r['status'] ) . '</td><td data-label="GHL delivery">' . self::status_pill( $r['lead_status'] ) . '</td><td data-label="Actions"><div class="htr-report-row-actions"><a class="htr-view-link" href="' . esc_url( admin_url( 'admin.php?page=htr-rr-reports&view=' . (int) $r['id'] ) ) . '" aria-label="View report ' . (int) $r['id'] . '">View &rarr;</a>' . self::report_download_link( $r, 'htr-view-link' ) . '</div></td></tr>'; // phpcs:ignore
 		}
 		echo '</tbody></table></div>';
+	}
+
+	/** Use the existing token-protected customer report and browser PDF workflow. */
+	private static function report_download_link( array $report, $class ) {
+		$url = add_query_arg( 'print', '1', HTR_RR_Report_Page::url( $report['token'] ) );
+		return '<a class="' . esc_attr( $class ) . ' htr-report-download" href="' . esc_url( $url ) . '" target="_blank" rel="noopener" aria-label="Download report ' . (int) $report['id'] . ' as PDF (opens in a new tab)" title="Opens the print dialog. Choose Save as PDF."><span class="dashicons dashicons-download" aria-hidden="true"></span> Download report<span class="screen-reader-text"> (opens in a new tab; choose Save as PDF)</span></a>';
 	}
 
 	/* ---------------- Reports ---------------- */
@@ -152,7 +159,7 @@ class HTR_RR_Admin {
 				echo '<p>Not found.</p></div>';
 				return;
 			}
-			echo '<nav class="htr-detail-actions" aria-label="Report actions"><a class="htr-detail-back" href="' . esc_url( admin_url( 'admin.php?page=htr-rr-reports' ) ) . '"><span class="dashicons dashicons-arrow-left-alt" aria-hidden="true"></span> All reports</a><span class="htr-detail-action-divider" aria-hidden="true"></span><a class="button button-primary" href="' . esc_url( HTR_RR_Report_Page::url( $r['token'] ) ) . '" target="_blank" rel="noopener"><span class="dashicons dashicons-external" aria-hidden="true"></span> Open customer report<span class="screen-reader-text"> (opens in a new tab)</span></a><a class="button" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=htr_rr_resend&id=' . $view ), 'htr_rr_resend_' . $view ) ) . '"><span class="dashicons dashicons-update" aria-hidden="true"></span> Resend lead to GHL</a></nav>';
+			echo '<nav class="htr-detail-actions" aria-label="Report actions"><a class="htr-detail-back" href="' . esc_url( admin_url( 'admin.php?page=htr-rr-reports' ) ) . '"><span class="dashicons dashicons-arrow-left-alt" aria-hidden="true"></span> All reports</a><span class="htr-detail-action-divider" aria-hidden="true"></span><a class="button button-primary" href="' . esc_url( HTR_RR_Report_Page::url( $r['token'] ) ) . '" target="_blank" rel="noopener"><span class="dashicons dashicons-external" aria-hidden="true"></span> Open customer report<span class="screen-reader-text"> (opens in a new tab)</span></a><a class="button" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=htr_rr_resend&id=' . $view ), 'htr_rr_resend_' . $view ) ) . '"><span class="dashicons dashicons-update" aria-hidden="true"></span> Resend lead to GHL</a>' . self::report_download_link( $r, 'button' ) . '</nav>';
 			self::report_details( $r );
 			self::log_table( $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . HTR_RR_DB::log_table() . ' WHERE report_id=%d ORDER BY id', $view ), ARRAY_A ) );
 			echo '</div>';
@@ -161,11 +168,14 @@ class HTR_RR_Admin {
 		$status = isset( $_GET['status'] ) ? sanitize_key( $_GET['status'] ) : ''; // phpcs:ignore
 		$where  = $status ? $wpdb->prepare( ' WHERE status=%s', $status ) : '';
 		self::head( 'Reports' );
+		echo '<div class="htr-reports-toolbar">';
 		echo '<nav class="htr-status-filters" aria-label="Filter reports by status">';
 		foreach ( array( '' => 'All', 'completed' => 'Completed', 'review' => 'Needs review', 'processing' => 'Processing' ) as $k => $l ) {
 			echo '<a class="htr-status-filter htr-status-filter--' . esc_attr( $k ?: 'all' ) . ( $k === $status ? ' is-current' : '' ) . '"' . ( $k === $status ? ' aria-current="page"' : '' ) . ' href="' . esc_url( admin_url( 'admin.php?page=htr-rr-reports' . ( $k ? '&status=' . $k : '' ) ) ) . '"><span class="htr-filter-dot" aria-hidden="true"></span>' . esc_html( $l ) . '</a>';
 		}
 		echo '</nav>';
+		echo '<div class="htr-reports-export"><a class="button" title="Exports all reports across every status, beyond the 200 displayed" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=htr_rr_export_reports' ), 'htr_rr_export_reports' ) ) . '"><span class="dashicons dashicons-download" aria-hidden="true"></span> Download overall report (CSV)</a></div>';
+		echo '</div>';
 		self::table( $wpdb->get_results( 'SELECT * FROM ' . HTR_RR_DB::reports() . $where . ' ORDER BY id DESC LIMIT 200', ARRAY_A ) ); // phpcs:ignore
 		echo '<p class="description">Newest 200 shown.</p></div>';
 	}
@@ -428,6 +438,54 @@ class HTR_RR_Admin {
 	}
 
 	/* ---------------- Actions ---------------- */
+	public static function export_reports() {
+		if ( ! current_user_can( self::CAP ) ) {
+			wp_die( 'Not allowed', '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( 'htr_rr_export_reports' );
+		global $wpdb;
+		$table = HTR_RR_DB::reports();
+		$last_id = (int) $wpdb->get_var( "SELECT MAX(id) FROM $table" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$columns = array(
+			'id' => 'Report ID', 'created_at' => 'Created (UTC)', 'status' => 'Report status',
+			'first_name' => 'First name', 'last_name' => 'Last name', 'email' => 'Email', 'phone' => 'Phone',
+			'address' => 'Address', 'city' => 'City', 'zip' => 'ZIP code', 'material' => 'Roof type',
+			'area_sqft' => 'Roof area (sq ft)', 'pitch_x12' => 'Pitch (rise per 12)', 'faces' => 'Roof faces',
+			'price_low' => 'Estimate low (USD)', 'price_high' => 'Estimate high (USD)',
+			'town' => 'Nearest town', 'town_miles' => 'Distance (miles)',
+			'lead_status' => 'Lead delivery', 'lead_tries' => 'Delivery attempts',
+		);
+		$stream = fopen( 'php://output', 'w' );
+		if ( false === $stream ) { wp_die( 'Could not create the report export.' ); }
+		nocache_headers();
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="htr-overall-reports-' . gmdate( 'Y-m-d' ) . '.csv"' );
+		header( 'X-Content-Type-Options: nosniff' );
+		fwrite( $stream, "\xEF\xBB\xBF" ); // UTF-8 for spreadsheet applications.
+		fputcsv( $stream, array_values( $columns ), ',', '"', '' );
+		// Keyset pagination keeps memory bounded and excludes reports added after export began.
+		$after = 0;
+		do {
+			$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table WHERE id > %d AND id <= %d ORDER BY id ASC LIMIT 500", $after, $last_id ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			foreach ( $rows as $row ) {
+				$cells = array();
+				foreach ( $columns as $key => $label ) {
+					$cells[] = self::report_csv_cell( $row[ $key ] ?? '' );
+				}
+				fputcsv( $stream, $cells, ',', '"', '' );
+				$after = (int) $row['id'];
+			}
+		} while ( count( $rows ) === 500 );
+		fclose( $stream );
+		exit;
+	}
+
+	/** Prevent customer-entered values from becoming spreadsheet formulas. */
+	private static function report_csv_cell( $value ) {
+		$value = (string) $value;
+		return preg_match( '/^[\s\x00-\x1F]*[=+@-]/', $value ) ? "'" . $value : $value;
+	}
+
 	public static function export_pricing() {
 		if ( ! current_user_can( self::CAP ) ) { wp_die( 'Not allowed', '', array( 'response' => 403 ) ); }
 		check_admin_referer( 'htr_rr_export_pricing' );
