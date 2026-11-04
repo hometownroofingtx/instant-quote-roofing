@@ -2,11 +2,19 @@
 
 A WordPress plugin for collecting roof-report requests, measuring roofs through Google Solar, calculating estimated price ranges, and sending leads to GoHighLevel through n8n.
 
-**Version:** 1.1.0
+**Version:** 1.2.0
 
-This release combines the GHL contact step with source tags/filters, the dedicated Source column, the map-only calculator, report downloads, pricing import/export, and per-user Reports/Logs pagination. It retains schema version 4 from the source-tagging update; installing it preserves saved options and report data. Deploy this combined `v1.1.0` release rather than the older ZIP based on `b03db98`.
+## Current release: 1.2.0 (5 November 2026)
 
-**1.1.0 (4 Nov 2026):** optional *Contact step = GHL form*. Settings → Lead delivery → Contact step. When set, steps 1–3 save and price the report, then the GHL form (GHL form ID, Form 30) is embedded with hidden fields `htr_report_id` and `htr_lead_type` plus the address and roof type pre-filled. Every lead is a real GHL form submission. n8n links the submission to the report (`htr_rr_link_contact`, header `X-HTR-Key` = shared secret) and the lead is sent as before. Reports wait in status *Waiting for GHL form* until linked. Default stays *Plugin form*.
+- Six-step Instant Roof Quote with compact styling, aligned progress indicators, light address search, image roof choices, and responsive sidebar.
+- Calculator now asks for roof type and address, previews aerial measurements, then shows the contact form and estimate. Customers do not need to know their roof size.
+- Confirm/Continue waits for the measurement preview to finish, including after the map pin moves. Unavailable imagery produces an inspection message rather than an invented price.
+- Backend design controls for calculator and quote content/images, with compact grouped quote fields. Material images remain under Pricing; GHL form fields are edited in GHL.
+- GHL success/contact messages are paired before saving. Temporary drafts create no Reports rows until contact finalization. Contact saves retry safely without requiring n8n.
+- US country prefill, alternate phone payload names, and international phone numbers with country codes. Missing phone data is reported explicitly.
+- Retains floating drawers, loaders, pricing transfers, downloads, source filters and per-user pagination.
+
+Schema remains version 4. Existing report data and saved integration settings are preserved. Use this repository release for future deployments; the older 1.1.0 ZIP does not contain these updates. Default contact mode remains Plugin form. Browser-reported GHL success is not independent server verification; the optional authenticated callback remains supported.
 
 **Requires:** WordPress 6.0+ and PHP 7.4+
 
@@ -230,18 +238,37 @@ This uses the existing Google browser key and Places API configuration. The redi
 
 ## Public roof calculator
 
+Edit its sidebar photo and display text under **Roof Reports > Settings > Calculator Design**. Choose images from the WordPress Media Library, then click **Save settings**. **Use default** clears the selected image without deleting it. A blank sidebar image selection uses the roof illustration. The calculator has no outer logo/banner or rounded background. Step headings/descriptions, sidebar heading, four guide items, reassurance copy and footer disclaimer are editable. The same settings apply inside the floating drawer. These controls do not change estimate calculation, measurement inputs or the selected contact mode.
+
 ```text
 [htr_roof_calculator]
 ```
 
-Uses the backend Calculator design: roof details on the left and an address/contact form in the right preview panel. No prices appear until the visitor submits valid contact information and a selected address. The saved lead response reveals the price range, low/high estimates and breakdown in the right panel. There is no anonymous calculator preview endpoint. Inputs are locked after success to keep the displayed estimate consistent with the saved request; refresh to start another request. Calculations use the existing server-side estimator and saved Pricing settings. Enter whole-number dimensions: area 100–100,000 sq ft, pitch 0–24 and faces 1–100. Roof types without automatic pricing show an on-site quote message.
+Uses a four-step public design: Roof Type, Address, Contact Information (GHL Form when configured), and Your Estimate. Image choices use Pricing material images, excluding Other. Roof dimensions come from server-side Google Solar measurements, not customer entry. The address preview includes area, footprint, faces, pitch and imagery date. Pricing uses the nearest service area and saved estimator settings. The layout includes an editable sidebar and stacks on smaller screens.
 
-In the default Plugin form mode, the contact section uses Google address suggestions and the existing first/last name, email, US phone, interests and optional SMS preferences. Selecting an address makes its nearest service area authoritative for submitted pricing. Submit requests use the existing report validation, honeypot, visitor limits, report storage and n8n → GHL delivery/retry flow. In GHL form mode, the selected GHL form is embedded instead; n8n links the contact before the page displays the result. Google and n8n credentials still come from Settings.
+In the default Plugin form mode, the contact section uses Google address suggestions and the existing first/last name, email, US phone, interests and optional SMS preferences. Selecting an address makes its nearest service area authoritative for submitted pricing. Submit requests use the existing report validation, honeypot, visitor limits, report storage and n8n → GHL delivery/retry flow. In GHL form mode, the selected GHL form is embedded instead; A submission message from the verified GHL iframe or a server-confirmed n8n link advances the page to the prepared estimate. After the iframe-specific success marker, the browser saves the matching contact details directly to WordPress; n8n is not required for this save. Google and n8n credentials still come from Settings.
 
-Calculator dimensions are customer-entered, not Google Solar measurements. Reports are always marked for review, identify their manual source, and do not render measured roof diagrams. Submitted prices are ignored; the server recalculates using current saved settings. The original report and standalone search shortcodes remain available.
+Legacy manual calculator API calls remain supported for integrations. The public calculator requests aerial measurement mode and retains Calculator as its request source. Submitted prices are ignored; the server recalculates using saved pricing. Missing imagery shows an on-site quote message.
 
 Validation: `php tests/calculator-test.php` runs isolated pricing, invalid-input, lead-pipeline, consent and original Solar-path checks without external calls. Verify Google suggestions, responsive appearance and real n8n/GHL delivery separately on the target site.
 
 ## Admin pagination
 
 Reports and Logs have independent pagination, with 20 items per page by default. Open WordPress **Screen Options** on either list to save your preferred count (1-200) for your own account. Reports retain source and status filters across pages; changing a filter starts on page 1. The overall CSV still exports all reports. Overview recent reports and an individual report's activity history keep their existing behavior.
+
+### GHL contact save without n8n
+
+Prepared GHL reports now include a short-lived, report-specific contact-write capability. The public report response does not expose it. The browser pairs GHL's contact payload with its iframe-specific successful-submission marker, checking the iframe, origin, location and fingerprint, then posts only name, email and phone to `htr_rr_save_contact` (or REST `save_contact`). The existing property, roof and source fields stay on the report. Custom GHL fields and SMS consent are not inferred from the sticky-contact message.
+
+WordPress validates the capability and contact fields, and atomically fills only a report still waiting for its form. Duplicate callbacks cannot overwrite an already-linked contact. The status is **Form submitted (browser)**, distinguishing this path from independently confirmed delivery. It is excluded from automatic outbound lead retries, so saving the contact does not require n8n or send the lead to GHL again. The existing authenticated n8n callback remains available.
+
+The result page shows contact-save progress, retries transient failures, and provides a retry button if the save fails. If GHL does not provide matching contact data, the page explicitly reports that WordPress has not received it. Keep the page open until the save completes. Previously submitted reports without contact data are not automatically backfilled.
+Roof-type changes in the Instant Roof GHL flow now reprice the same owned waiting report at the same map location. Rapid selections are serialized, obsolete iframe listeners are removed, and the submitted form is locked against accidental new drafts. Contact-save confirmation remains visible. Repricing cannot alter a submitted report. Existing draft reports are preserved; this does not delete prior test records.
+
+### Submission-only Reports entries
+
+The frontend GHL flow uses `draft_prepare` / `calculator_draft_prepare` to prepare a temporary quote in an expiring WordPress transient (48 hours), not the Reports table. Selecting or repricing a roof type therefore adds no row to Reports, its totals or CSV exports. Successful contact saving promotes the draft into one report with the latest property/roof selection and submitted contact fields. The unique report token prevents retries from creating duplicates. Abandoned temporary drafts expire; existing historical report rows are not removed.
+
+The form's hidden `htr_report_id` carries a `draft-<token>` reference until submission. The authenticated `link_contact` endpoint accepts this reference too, if an optional workflow is still in use; pass the value unchanged rather than coercing it to an integer. Legacy `prepare` endpoints remain available for older integrations, while the current frontend uses the draft endpoints. Public report links become available after finalization, and the page reports any failure to save the submitted contact.
+### Instant Roof Quote design
+Roof Reports > Settings > Instant Roof Quote Design controls the six progress labels, step headings and descriptions, navigation and report action labels, analysis checklist, property illustration, sidebar photo and sidebar copy. Roof material photos remain in Pricing; GHL fields and its internal form appearance remain managed in GHL. The sidebar stacks beneath the quote on smaller screens. Design settings use the existing option, validate image attachments, and preserve absent values during partial updates.

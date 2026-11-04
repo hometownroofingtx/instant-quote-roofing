@@ -16,7 +16,7 @@ class HTR_RR_REST {
 	 * Same handlers, same guards; body is JSON (php://input).
 	 */
 	public static function ajax_init() {
-		foreach ( array( 'htr_rr_report' => 'create', 'htr_rr_email' => 'email_copy', 'htr_rr_preview' => 'preview', 'htr_rr_calculator_lead' => 'calculator_lead', 'htr_rr_prepare' => 'prepare', 'htr_rr_calculator_prepare' => 'calculator_prepare', 'htr_rr_status' => 'status', 'htr_rr_link_contact' => 'link_contact' ) as $action => $fn ) {
+		foreach ( array( 'htr_rr_report' => 'create', 'htr_rr_email' => 'email_copy', 'htr_rr_preview' => 'preview', 'htr_rr_calculator_lead' => 'calculator_lead', 'htr_rr_prepare' => 'prepare', 'htr_rr_calculator_prepare' => 'calculator_prepare', 'htr_rr_status' => 'status', 'htr_rr_link_contact' => 'link_contact', 'htr_rr_save_contact' => 'save_contact', 'htr_rr_reprice' => 'reprice', 'htr_rr_draft_prepare' => 'draft_prepare', 'htr_rr_calculator_draft_prepare' => 'calculator_draft_prepare' ) as $action => $fn ) {
 			$cb = function () use ( $fn ) {
 				$req = new WP_REST_Request( 'POST' );
 				$req->set_header( 'content-type', 'application/json' );
@@ -30,7 +30,7 @@ class HTR_RR_REST {
 	}
 
 	public static function routes() {
-		foreach ( array( 'calculator_lead', 'prepare', 'calculator_prepare', 'status', 'link_contact' ) as $method ) {
+		foreach ( array( 'calculator_lead', 'prepare', 'calculator_prepare', 'status', 'link_contact', 'save_contact', 'reprice', 'draft_prepare', 'calculator_draft_prepare' ) as $method ) {
 			register_rest_route( 'htr-rr/v1', '/' . $method, array( 'methods' => 'POST', 'callback' => array( __CLASS__, $method ), 'permission_callback' => '__return_true' ) );
 		}
 		register_rest_route(
@@ -105,12 +105,101 @@ class HTR_RR_REST {
 	public static function calculator_prepare( WP_REST_Request $req ) {
 		return self::create( $req, true, true );
 	}
+	public static function draft_prepare( WP_REST_Request $req ) { return self::create( $req, false, true, true ); }
+	public static function calculator_draft_prepare( WP_REST_Request $req ) { return self::create( $req, true, true, true ); }
+
+	private static function contact_record( $token ) {
+		if ( ! is_string( $token ) || ! preg_match( '/^[a-f0-9]{32}$/D', $token ) ) { return null; }
+		$report = HTR_RR_DB::get_by_token( $token );
+		if ( $report ) { return $report; }
+		$draft = get_transient( 'htr_rr_draft_' . $token );
+		return is_array( $draft ) && ( $draft['token'] ?? '' ) === $token ? $draft : null;
+	}
+	private static function authorized_contact( array $r, $expires, $key ) {
+		$draft_key = hash_hmac( 'sha256', 'ghl-draft-contact|' . $r['token'] . '|' . $expires, wp_salt( 'auth' ) );
+		return hash_equals( self::contact_key( $r, $expires ), $key ) || hash_equals( $draft_key, $key );
+	}
+	private static function persist_draft( array $draft, array $contact ) {
+		$data = array_merge( $draft, $contact );
+		unset( $data['id'], $data['_draft'] );
+		$id = HTR_RR_DB::insert_contact_report( $data );
+		if ( $id ) { delete_transient( 'htr_rr_draft_' . $draft['token'] ); }
+		return $id;
+	}
 
 	/** Public: has the GHL form for this report been submitted and linked yet? (the page polls this). */
+	public static function save_contact( WP_REST_Request $req ) {
+		$p = $req->get_json_params();
+		if ( ! is_array( $p ) || ! is_string( $p['token'] ?? null ) || ! is_string( $p['contact_key'] ?? null ) || ! is_numeric( $p['expires'] ?? null ) ) { return self::fail( 'invalid', 'Invalid contact-save request.' ); }
+		$r = self::contact_record( $p['token'] );
+		$expires = (int) $p['expires'];
+		if ( ! $r || $expires < time() || $expires > time() + 2 * DAY_IN_SECONDS || ! self::authorized_contact( $r, $expires, $p['contact_key'] ) ) { return self::fail( 'forbidden', 'This contact-save link is invalid or expired.', 403 ); }
+		if ( 'awaiting_form' !== $r['lead_status'] ) { return new WP_REST_Response( array( 'ok' => true, 'saved' => true, 'already_saved' => true ), 200 ); }
+		$contact = is_array( $p['contact'] ?? null ) ? $p['contact'] : array();
+		$clean = array();
+		foreach ( array( 'first_name', 'last_name', 'email', 'phone' ) as $key ) {
+			$value = $contact[ $key ] ?? '';
+			if ( ! is_string( $value ) ) { return self::fail( 'invalid', 'Invalid contact field.' ); }
+			$clean[ $key ] = sanitize_text_field( $value );
+		}
+		$clean['email'] = sanitize_email( $clean['email'] );
+		$digits = preg_replace( '/\D/', '', $clean['phone'] );
+		$international = preg_match( '/^\s*\+/', $clean['phone'] );
+		if ( $international ) {
+			$clean['phone'] = preg_match( '/^[1-9][0-9]{6,14}$/', $digits ) ? '+' . $digits : '';
+		} else {
+			if ( 11 === strlen( $digits ) && '1' === $digits[0] ) { $digits = substr( $digits, 1 ); }
+			$clean['phone'] = 10 === strlen( $digits ) ? '+1' . $digits : '';
+		}
+		if ( '' === trim( $clean['first_name'] . $clean['last_name'] ) || ( ! is_email( $clean['email'] ) && ! $clean['phone'] ) || strlen( $clean['first_name'] ) > 80 || strlen( $clean['last_name'] ) > 80 || strlen( $clean['email'] ) > 160 ) { return self::fail( 'invalid', 'GHL did not provide a valid name and email or phone.' ); }
+		if ( ! is_email( $clean['email'] ) ) { $clean['email'] = ''; }
+		// This records browser-reported submission, not independently verified GHL delivery.
+		$clean['lead_status'] = 'ghl_submitted';
+		$clean['lead_error'] = '';
+		if ( ! empty( $r['_draft'] ) ) {
+			$id = self::persist_draft( $r, $clean );
+			if ( ! $id ) { return self::fail( 'save_failed', 'The submitted report could not be saved. Please retry.', 500 ); }
+			$r['id'] = $id; $saved = 1;
+		} else { $saved = HTR_RR_DB::save_browser_contact( $r['id'], $clean ); }
+		if ( false === $saved ) { return self::fail( 'save_failed', 'Contact details could not be saved. Please retry.', 500 ); }
+		if ( 0 === $saved ) {
+			$current = HTR_RR_DB::get_report( $r['id'] );
+			if ( ! $current || 'awaiting_form' === $current['lead_status'] ) { return self::fail( 'save_failed', 'Contact details were not saved. Please retry.', 500 ); }
+		}
+		HTR_RR_DB::log( 'info', 'lead', 'Contact saved from browser-reported GHL submission; no outbound lead sent.', $r['id'] );
+		return new WP_REST_Response( array( 'ok' => true, 'saved' => true, 'phone_saved' => ! empty( $clean['phone'] ) ), 200 );
+	}
+
+	private static function contact_key( array $report, $expires ) {
+		if ( ! empty( $report['_draft'] ) ) { return hash_hmac( 'sha256', 'ghl-draft-contact|' . $report['token'] . '|' . $expires, wp_salt( 'auth' ) ); }
+		return hash_hmac( 'sha256', 'ghl-contact|' . $report['id'] . '|' . $report['token'] . '|' . $expires, wp_salt( 'auth' ) );
+	}
+
+	/** Reprice an owned waiting report without creating another row or remeasuring the roof. */
+	public static function reprice( WP_REST_Request $req ) {
+		$p = $req->get_json_params();
+		if ( ! is_array( $p ) || ! is_string( $p['token'] ?? null ) || ! is_string( $p['contact_key'] ?? null ) || ! is_numeric( $p['expires'] ?? null ) || ! is_string( $p['material'] ?? null ) ) { return self::fail( 'invalid', 'Invalid roof selection.' ); }
+		$r = self::contact_record( $p['token'] );
+		$expires = (int) $p['expires'];
+		if ( ! $r || $expires < time() || $expires > time() + 2 * DAY_IN_SECONDS || ! self::authorized_contact( $r, $expires, $p['contact_key'] ) ) { return self::fail( 'forbidden', 'This report cannot be changed.', 403 ); }
+		if ( 'awaiting_form' !== $r['lead_status'] ) { return self::fail( 'already_submitted', 'This report has already been submitted. Refresh to start a new request.', 409 ); }
+		$s = HTR_RR_Settings::all();
+		$material = sanitize_key( $p['material'] );
+		if ( ! isset( $s['materials'][ $material ] ) ) { return self::fail( 'invalid', 'Choose a valid roof type.' ); }
+		$m = json_decode( $r['measurements'] ?? '', true );
+		$near = HTR_RR_Estimator::nearest_area( (float) $r['lat'], (float) $r['lng'], $s['areas'] );
+		$e = is_array( $m ) && ! empty( $m['ok'] ) ? HTR_RR_Estimator::estimate( $m, $material, $s, $near ? $near['mult'] : 1 ) : array();
+		$update = array( 'material' => $material, 'estimate' => ! empty( $e['ok'] ) ? wp_json_encode( $e ) : null, 'price_low' => $e['low'] ?? null, 'price_high' => $e['high'] ?? null, 'status' => ! empty( $e['low'] ) && empty( $r['review_reason'] ) ? 'completed' : 'review' );
+		if ( ! empty( $r['_draft'] ) ) { $r = array_merge( $r, $update ); $result = set_transient( 'htr_rr_draft_' . $r['token'], $r, 2 * DAY_IN_SECONDS ); }
+		else { $result = HTR_RR_DB::update_waiting_report( $r['id'], $update ); $r = HTR_RR_DB::get_report( $r['id'] ); }
+		if ( false === $result || ! $r || 'awaiting_form' !== $r['lead_status'] ) { return self::fail( 'save_failed', 'The roof selection could not be updated. Refresh if you already submitted.', 409 ); }
+		return new WP_REST_Response( array( 'ok' => true, 'report' => HTR_RR_Report_Page::public_view( $r ), 'report_id' => ! empty( $r['_draft'] ) ? 'draft-' . $r['token'] : (int) $r['id'], 'contact_key' => $p['contact_key'], 'contact_expires' => $expires, 'lead_type' => 'Instant quote', 'roof_type' => $s['materials'][ $material ]['label'] ), 200 );
+	}
+
 	public static function status( WP_REST_Request $req ) {
 		$p = $req->get_json_params();
 		$token = is_array( $p ) && is_string( $p['token'] ?? null ) ? $p['token'] : '';
-		$r = $token ? HTR_RR_DB::get_by_token( $token ) : null;
+		$r = $token ? self::contact_record( $token ) : null;
 		if ( ! $r ) {
 			return self::fail( 'not_found', 'Report not found.', 404 );
 		}
@@ -134,8 +223,10 @@ class HTR_RR_REST {
 			return self::fail( 'forbidden', 'Not allowed.', 403 );
 		}
 		$p  = $req->get_json_params();
-		$id = is_array( $p ) && isset( $p['report_id'] ) ? (int) $p['report_id'] : 0;
-		$r  = $id ? HTR_RR_DB::get_report( $id ) : null;
+		$reference = is_array( $p ) ? ( $p['report_id'] ?? '' ) : '';
+		$id = is_scalar( $reference ) ? (int) $reference : 0;
+		$r = is_string( $reference ) && preg_match( '/^draft-([a-f0-9]{32})$/D', $reference, $match ) ? self::contact_record( $match[1] ) : ( $id ? HTR_RR_DB::get_report( $id ) : null );
+		if ( $r ) { $id = (int) $r['id']; }
 		if ( ! $r ) {
 			return self::fail( 'not_found', 'Report ' . $id . ' not found.', 404 );
 		}
@@ -153,9 +244,7 @@ class HTR_RR_REST {
 		if ( ( '' === $first && '' === $last ) || ( ! is_email( $email ) && '' === $phone ) ) {
 			return self::fail( 'invalid', 'The form submission has no name or no email/phone.' );
 		}
-		HTR_RR_DB::update_report(
-			$id,
-			array(
+		$contact_values = array(
 				'first_name'  => $first,
 				'last_name'   => $last,
 				'email'       => is_email( $email ) ? $email : '',
@@ -164,14 +253,17 @@ class HTR_RR_REST {
 				'lead_status' => 'pending',
 				'lead_tries'  => 0,
 				'lead_error'  => '',
-			)
-		);
+			);
+		if ( ! empty( $r['_draft'] ) ) {
+			$id = self::persist_draft( $r, $contact_values );
+			if ( ! $id ) { return self::fail( 'save_failed', 'The submitted report could not be saved.', 500 ); }
+		} else { HTR_RR_DB::update_report( $id, $contact_values ); }
 		HTR_RR_DB::log( 'info', 'lead', 'GHL form submission linked' . ( ! empty( $p['submission_id'] ) ? ' (' . sanitize_text_field( (string) $p['submission_id'] ) . ')' : '' ), $id );
 		$sent = HTR_RR_Leads::send( $id );
 		return new WP_REST_Response( array( 'ok' => true, 'linked' => true, 'delivered' => (bool) $sent ), 200 );
 	}
 
-	public static function create( WP_REST_Request $req, $calculator = false, $deferred = false ) {
+	public static function create( WP_REST_Request $req, $calculator = false, $deferred = false, $draft = false ) {
 		if ( $deferred && 'ghl_form' !== HTR_RR_Settings::public_config()['contactMode'] ) {
 			return self::fail( 'disabled', 'The GHL contact step is not enabled.', 403 );
 		}
@@ -179,8 +271,9 @@ class HTR_RR_REST {
 		if ( ! is_array( $p ) ) {
 			return self::fail( 'bad_request', 'Please fill in the form and try again.' );
 		}
-		$manual = $calculator ? self::calculator_measurements( $p ) : null;
-		if ( $calculator && ! $manual ) { return self::fail( 'invalid', 'Check your roof area, pitch and number of roof faces.' ); }
+		$automatic = $calculator && isset( $p['measurement_mode'] ) && 'aerial' === $p['measurement_mode'];
+		$manual = $calculator && ! $automatic ? self::calculator_measurements( $p ) : null;
+		if ( $calculator && ! $automatic && ! $manual ) { return self::fail( 'invalid', 'Check your roof area, pitch and number of roof faces.' ); }
 		// 1. Honeypot: real people never fill the hidden "website" field.
 		if ( ! empty( $p['website'] ) ) {
 			return self::fail( 'bad_request', 'Please try again.' );
@@ -251,9 +344,7 @@ class HTR_RR_REST {
 
 		global $wpdb;
 		$token = bin2hex( random_bytes( 16 ) );
-		$wpdb->insert(
-			HTR_RR_DB::reports(),
-			array(
+		$record = array(
 				'token'      => $token,
 				'created_at' => current_time( 'mysql', true ),
 				'status'     => 'processing',
@@ -275,14 +366,15 @@ class HTR_RR_REST {
 				'source_url' => esc_url_raw( isset( $p['source_url'] ) ? substr( (string) $p['source_url'], 0, 250 ) : '' ),
 				'ip_hash'    => $ip,
 				'lead_status' => $deferred ? 'awaiting_form' : 'pending',
-			)
-		);
-		$id = (int) $wpdb->insert_id;
-		if ( ! $id ) {
-			HTR_RR_DB::log( 'error', 'rest', 'Could not save the report: ' . $wpdb->last_error );
-			return self::fail( 'server', 'Something went wrong on our side. Please call us.', 500 );
+			);
+		if ( $draft ) {
+			$id = 0;
+			$record = array_merge( array( 'id' => 0, '_draft' => true, 'area_sqft' => null, 'pitch_x12' => null, 'faces' => null, 'imagery_quality' => '', 'imagery_date' => '', 'price_low' => null, 'price_high' => null, 'review_reason' => '', 'measurements' => null, 'estimate' => null, 'lead_tries' => 0, 'lead_error' => '' ), $record );
+		} else {
+			$wpdb->insert( HTR_RR_DB::reports(), $record );
+			$id = (int) $wpdb->insert_id;
+			if ( ! $id ) { return self::fail( 'server', 'The report could not be saved.', 500 ); }
 		}
-
 		// 5. Measure + estimate. Any problem = saved for review; the customer is told honestly and the lead still goes out.
 		$review = array();
 		$m      = array( 'ok' => false );
@@ -292,7 +384,7 @@ class HTR_RR_REST {
 		if ( ! $inside ) {
 			$review[] = 'Outside the service area (' . ( $near ? $near['miles'] . ' mi from ' . $near['town'] : 'unknown' ) . ')';
 		}
-		if ( $calculator ) {
+		if ( $calculator && ! $automatic ) {
 			$m = $manual;
 			$review[] = 'Calculator estimate from customer-entered dimensions; confirm measurements on site.';
 			$e = HTR_RR_Estimator::estimate( $m, $mat, $s, $near ? $near['mult'] : 1.0 );
@@ -321,9 +413,7 @@ class HTR_RR_REST {
 		}
 		$has_measure = ! empty( $m['ok'] );
 		$status      = $has_measure ? ( $review ? 'review' : 'completed' ) : 'review';
-		HTR_RR_DB::update_report(
-			$id,
-			array(
+		$measured = array(
 				'status'          => $status,
 				'area_sqft'       => $has_measure ? $m['area_sqft'] : null,
 				'pitch_x12'       => $has_measure ? $m['pitch_x12'] : null,
@@ -335,14 +425,17 @@ class HTR_RR_REST {
 				'review_reason'   => substr( implode( '; ', $review ), 0, 250 ),
 				'measurements'    => $has_measure ? wp_json_encode( $m ) : null,
 				'estimate'        => ! empty( $e['ok'] ) ? wp_json_encode( $e ) : null,
-			)
-		);
+			);
+		if ( $draft ) {
+			$record = array_merge( $record, $measured );
+			if ( ! set_transient( 'htr_rr_draft_' . $token, $record, 2 * DAY_IN_SECONDS ) ) { return self::fail( 'server', 'The temporary quote could not be prepared.', 500 ); }
+		} else { HTR_RR_DB::update_report( $id, $measured ); }
 		// 6. Lead to GHL (through n8n). Failure here never blocks the customer; WP-Cron retries.
 		if ( ! $deferred ) {
 			HTR_RR_Leads::send( $id );
 		}
 
-		$r = HTR_RR_DB::get_report( $id );
+		$r = $draft ? $record : HTR_RR_DB::get_report( $id );
 		$response = array( 'ok' => true, 'report' => HTR_RR_Report_Page::public_view( $r ) );
 		if ( $calculator ) {
 			$response['estimate'] = $e;
@@ -351,7 +444,9 @@ class HTR_RR_REST {
 		}
 		if ( $deferred ) {
 			// Values the page pre-fills into the GHL form (hidden fields + roof type).
-			$response['report_id'] = $id;
+			$response['report_id'] = $draft ? 'draft-' . $token : $id;
+			$response['contact_expires'] = time() + 2 * DAY_IN_SECONDS;
+			$response['contact_key'] = self::contact_key( $r, $response['contact_expires'] );
 			$response['lead_type'] = $calculator ? 'Calculator' : 'Instant quote';
 			$response['roof_type'] = isset( $s['materials'][ $mat ]['label'] ) ? $s['materials'][ $mat ]['label'] : $mat;
 		}

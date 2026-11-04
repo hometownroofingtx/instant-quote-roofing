@@ -160,3 +160,140 @@
 /* 1.1.0: GHL form at the contact step */
 .htr-rr-ghl{min-height:120px}
 .htr-rr-ghl iframe{display:block;width:100%;min-height:780px;border:0}
+
+/* Public calculator: guided estimate layout. */
+.htr-estimate-guide-hero .htr-estimate-sidebar-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.65}.htr-estimate-guide-hero:has(.htr-estimate-sidebar-photo){background:#063353}
+.htr-rr.htr-rr-calculator{max-width:1440px;padding:0;border-radius:0;background:transparent;color:#102c49}
+
+.htr-rr-calculator .htr-rr-calc-layout{grid-template-columns:minmax(0,1.95fr) minmax(260px,1fr);gap:16px;align-items:start}
+.htr-estimate-main,.htr-estimate-guide{min-width:0;padding:14px;background:#fff;border-radius:20px;box-shadow:0 12px 30px #0b2d4f14}
+.htr-rr-calculator .htr-estimate-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;list-style:none;padding:0 0 14px;margin:0 0 14px;border-bottom:1px solid #e7edf3}
+.htr-estimate-steps li{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;font-size:12px;line-height:1.4;color:#304b65}
+.htr-estimate-steps li:before{content:"";position:absolute;top:19px;left:calc(-50% - 4px);width:100%;height:3px;background:#dce6ef}.htr-estimate-steps li:first-child:before{display:none}
+.htr-estimate-steps li>span{position:relative;z-index:1;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#e4ebf3;color:#19344e;font-size:18px;font-weight:700}
+.htr-estimate-steps li[aria-current]>span,.htr-estimate-steps li.is-complete>span{background:#0563c7;color:#fff}.htr-estimate-steps li[aria-current]{color:#0b2d4f;font-weight:700}.htr-estimate-steps li[aria-current]:after{content:"";position:absolute;bottom:-15px;left:10%;right:10%;height:4px;border-radius:4px;background:linear-gradient(90deg,#17bce9,#0563c7)}
+.htr-rr-calculator .htr-rr-card{margin:0;padding:18px;border:1px solid #d8e3ef;border-radius:15px;box-shadow:0 4px 12px #0b2d4f08}
+.htr-rr-calculator .htr-rr-card h3{margin:0 0 6px;font-size:clamp(22px,2.2vw,27px);font-weight:750;color:#102c49;line-height:1.2}.htr-rr-calculator .htr-rr-sub{margin:6px 0 10px;font-size:13px;color:#5a728b;line-height:1.5}
+.htr-rr-calculator .htr-estimate-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin-top:14px}.htr-estimate-fields>.htr-rr-row,.htr-estimate-fields>.htr-estimate-wide{grid-column:1/-1}
+.htr-rr-calculator form label{min-width:0;margin:0;font-size:13px;color:#102c49}.htr-rr-calculator input:not([type=checkbox]),.htr-rr-calculator select{box-sizing:border-box;min-width:0;min-height:44px;border-radius:8px;background:#fcfdff;font-size:15px}
+.htr-estimate-required{display:inline;color:#d6202b;font-size:12px}.htr-rr-calculator .htr-rr-btn{gap:12px;min-height:44px;padding:10px 18px;border-radius:9px;background:#0563c7;color:#fff;font-size:16px;font-weight:700}.htr-rr-calculator .htr-rr-btn:hover{background:#084c9c}
+.htr-rr-calculator .htr-rr-calc-actions{padding-top:14px;margin-top:14px;flex-wrap:wrap}.htr-rr-calculator .htr-rr-calc-contact{margin:0}.htr-estimate-navigation{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px}
+.htr-rr-calculator .htr-rr-calc-footer{margin:14px 0 0;padding:10px 0 0;border-radius:0;background:transparent;font-size:12px;line-height:1.5}
+.htr-estimate-guide{padding:14px}.htr-estimate-guide-hero{position:relative;min-height:160px;overflow:hidden;padding:20px 16px;border-radius:14px;background:linear-gradient(130deg,#063353,#1c79ad);color:#fff}.htr-estimate-guide-hero svg{position:absolute;width:110%;bottom:0;right:-80px;opacity:.65}.htr-rr-calculator .htr-estimate-guide-hero h3{position:relative;margin:0;font-size:24px;line-height:1.2;font-weight:750;color:#fff}
+.htr-estimate-guide>ol{list-style:none;margin:8px 0;padding:0 6px}.htr-estimate-guide li{display:flex;align-items:flex-start;gap:10px;padding:12px 0;border-bottom:1px solid #edf2f6}.htr-estimate-guide li>span{display:grid;place-items:center;flex:none;width:30px;height:30px;border-radius:50%;background:#0563c7;color:#fff;font-weight:700}.htr-estimate-guide strong{color:#102c49;font-size:14px;line-height:1.4}.htr-estimate-guide li p,.htr-estimate-reassurance p{margin:4px 0 0;font-size:12px;color:#4c6881;line-height:1.5}
+.htr-estimate-reassurance{margin:6px;padding:12px;border-radius:12px;background:#e6f5fc}
+.htr-rr-calculator [hidden]{display:none!important}.htr-rr-calculator [data-calc-stage]:focus{outline:none}
+@media(max-width:1000px){.htr-rr-calculator .htr-rr-calc-layout{grid-template-columns:1fr}.htr-estimate-guide{display:none}}
+@media(max-width:600px){.htr-rr.htr-rr-calculator{padding:0;border-radius:0}.htr-estimate-main{padding:12px;border-radius:14px}.htr-estimate-steps li{font-size:10px;gap:7px}.htr-estimate-steps li>span{width:30px;height:30px;font-size:14px}.htr-estimate-steps li:before{top:14px}.htr-rr-calculator .htr-rr-card{padding:16px}.htr-rr-calculator .htr-estimate-fields{grid-template-columns:1fr;gap:10px}.htr-rr-calculator .htr-estimate-fields>.htr-rr-row{grid-template-columns:1fr 1fr}.htr-rr-calculator .htr-rr-btn{width:100%;font-size:14px}.htr-estimate-navigation{align-items:stretch}.htr-rr-calculator .htr-rr-calc-footer{font-size:11px}}
+
+/* Calculator roof choices reuse the material images configured on Pricing. */
+.htr-rr-calculator .htr-calc-roofs{border:0;padding:0;margin:0 0 12px;min-width:0}
+.htr-rr-calculator .htr-calc-roofs legend{margin-bottom:10px;font-weight:600}
+.htr-rr-calculator .htr-calc-roofs .htr-rr-materials{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:700px){.htr-rr-calculator .htr-calc-roofs .htr-rr-materials{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.htr-rr-calculator .htr-calc-roof{position:relative;display:block;margin:0;cursor:pointer}
+.htr-rr-calculator .htr-calc-roof input[type=radio]{position:absolute;width:1px;height:1px;margin:0;padding:0;opacity:0}
+.htr-rr-calculator .htr-calc-roof-content{display:block;overflow:hidden;border:2px solid #dce3eb;border-radius:8px;background:#fff;height:100%}
+.htr-rr-calculator .htr-calc-roof .htr-rr-material-label{display:block;padding:10px;font-size:13px;line-height:1.4}
+.htr-rr-calculator .htr-calc-roof:hover .htr-calc-roof-content{border-color:#6f8ba5}
+.htr-rr-calculator .htr-calc-roof input:checked + .htr-calc-roof-content{border-color:#0064c8;background:#edf5ff;box-shadow:0 0 0 1px #0064c8}
+.htr-rr-calculator .htr-calc-roof input:checked + .htr-calc-roof-content:after{content:'\2713';position:absolute;right:8px;top:8px;border-radius:50%;background:#0064c8;color:white;width:24px;height:24px;display:grid;place-items:center}
+.htr-rr-calculator .htr-calc-roof input:focus-visible + .htr-calc-roof-content{outline:3px solid #0064c8;outline-offset:3px}
+
+/* Instant Roof Quote: six focused steps inspired by the 01–06 reference panels. */
+#htr-rr.htr-rr-wizard{max-width:820px;margin:0 auto;padding:18px;border:1px solid #d4e5f1;border-radius:20px;background:linear-gradient(150deg,#fff 65%,#edf7ff);box-shadow:0 5px 24px #143b6214;color:#082348}
+#htr-rr.htr-rr-wizard .htr-rr-hero{display:none}
+#htr-rr.htr-rr-wizard .htr-rr-grid{display:block}
+#htr-rr.htr-rr-wizard [data-card]{margin:0;border:0;box-shadow:none;background:transparent;padding:22px 12px 12px;opacity:1;scroll-margin-top:24px}
+#htr-rr.htr-rr-wizard [data-card][hidden]{display:none}
+#htr-rr.htr-rr-wizard [data-card]:focus{outline:none}
+#htr-rr.htr-rr-wizard h3{font-size:clamp(20px,3vw,27px);line-height:1.25;margin-bottom:8px}
+#htr-rr.htr-rr-wizard .htr-rr-sub{margin-bottom:20px}
+.htr-quote-steps{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));list-style:none!important;padding:14px 2px 0!important;margin:0!important;border-radius:14px;background:linear-gradient(#fff,#f3f8fe);box-shadow:0 3px 10px #163c6812}
+.htr-quote-steps li{position:relative;display:flex;align-items:center;flex-direction:column;gap:8px;padding:0 2px 15px;font-size:11px;text-align:center;line-height:1.25}
+.htr-quote-steps li:before{content:'';position:absolute;top:17px;left:-50%;right:50%;height:3px;background:#d6e1ee}
+.htr-quote-steps li:first-child:before{display:none}
+.htr-quote-steps li>span{position:relative;display:grid;place-items:center;border-radius:50%;width:36px;height:36px;background:#dce6f1;color:#14314e;font-size:18px;font-weight:700}
+.htr-quote-steps li.is-complete:before,.htr-quote-steps li[aria-current]:before{background:#0085f2}
+.htr-quote-steps li.is-complete>span,.htr-quote-steps li[aria-current]>span{background:#0064d7;color:white}
+.htr-quote-steps li.is-complete>span{font-size:0}
+.htr-quote-steps li.is-complete>span:after{content:'\2713';font-size:20px}
+.htr-quote-steps li[aria-current]{color:#005bd2}
+.htr-quote-steps li[aria-current]:after{content:'';position:absolute;bottom:0;left:8%;right:8%;height:4px;border-radius:4px;background:#0064d7}
+.htr-quote-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:24px}
+.htr-quote-nav>button:only-child{margin-left:auto}
+#htr-rr.htr-rr-wizard .htr-rr-btn{border-radius:10px;padding:12px 22px;line-height:1.2;background:#0064d7;border:1px solid #0064d7;box-shadow:none}
+#htr-rr.htr-rr-wizard .htr-rr-btn--ghost{background:white;color:#102c49;border-color:#264b73}
+#htr-rr.htr-rr-wizard .htr-rr-btn:focus-visible{outline:3px solid #0aa5ff;outline-offset:3px}
+#htr-rr.htr-rr-wizard .htr-rr-materials{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+#htr-rr.htr-rr-wizard .htr-rr-mat>.htr-rr-material-label{justify-content:center;min-height:36px;padding:7px;font-weight:700}
+#htr-rr.htr-rr-wizard .htr-rr-map{height:310px;border-radius:12px}
+#htr-rr.htr-rr-wizard .htr-rr-confirm{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);align-items:start}
+#htr-rr.htr-rr-wizard .htr-rr-prop{border-radius:12px;background:#f8fbff}
+.htr-quote-illustration{max-width:440px;margin:18px auto 0}
+.htr-quote-illustration svg{display:block;width:100%;height:auto}
+.htr-quote-working{display:flex;align-items:center;gap:12px;padding:20px;background:#edf6ff;border-radius:12px;font-weight:600}
+.htr-quote-working>span{width:22px;height:22px;border:3px solid #c9e5ff;border-top-color:#0064d7;border-radius:50%;animation:htr-quote-spin 1s linear infinite}
+@keyframes htr-quote-spin{to{transform:rotate(360deg)}}
+#htr-rr.htr-rr-wizard .htr-rr-tile--price{background:#efffe3;border:1px solid #d2edba}
+#htr-rr.htr-rr-wizard .htr-rr-tile--price b{color:#0064d7}
+#htr-rr.htr-rr-wizard .htr-rr-actions{display:flex;flex-wrap:wrap;gap:10px}
+@media(max-width:600px){#htr-rr.htr-rr-wizard{padding:10px;border-radius:16px}#htr-rr.htr-rr-wizard [data-card]{padding:20px 4px 8px}.htr-quote-steps li{font-size:9px;gap:6px}.htr-quote-steps li>span{width:29px;height:29px;font-size:15px}.htr-quote-steps li:before{top:14px}#htr-rr.htr-rr-wizard .htr-rr-confirm{grid-template-columns:1fr}#htr-rr.htr-rr-wizard .htr-rr-materials{gap:8px}#htr-rr.htr-rr-wizard .htr-rr-material-visual,#htr-rr.htr-rr-wizard .htr-rr-swatch{height:78px}#htr-rr.htr-rr-wizard .htr-rr-mat>.htr-rr-material-label{font-size:11px}#htr-rr.htr-rr-wizard .htr-rr-btn{padding:12px 14px;font-size:13px}}
+@media(prefers-reduced-motion:reduce){.htr-quote-working>span{animation:none}}
+
+/* Quote layout and connector alignment: each segment ends at the circle edge. */
+.htr-quote-layout{display:grid;grid-template-columns:minmax(0,820px) minmax(260px,340px);gap:22px;align-items:start;max-width:1182px;margin:0 auto}
+.htr-quote-layout #htr-rr.htr-rr-wizard{width:100%;min-width:0;box-sizing:border-box}
+.htr-quote-layout .htr-quote-steps{align-items:start;isolation:isolate}
+.htr-quote-layout .htr-quote-steps li{list-style:none;margin:0;min-width:0;background:none}
+.htr-quote-layout .htr-quote-steps li:before{top:18px;left:calc(-50% + 18px);right:calc(50% + 18px);height:3px;transform:translateY(-50%);border:0;border-radius:0;z-index:0}
+.htr-quote-layout .htr-quote-steps li>span{z-index:1;box-sizing:border-box;flex:none}
+.htr-quote-layout .htr-quote-steps li>b{position:relative;z-index:1}
+.htr-quote-sidebar{border:1px solid #d4e5f1;border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 5px 24px #143b6214;color:#102c49}
+.htr-quote-sidebar-photo img{display:block;width:100%;height:180px;object-fit:cover;margin:0}
+.htr-quote-sidebar-content{padding:24px}
+.htr-quote-sidebar h2{font-size:24px;line-height:1.25;margin:0 0 10px;color:#082348}
+.htr-quote-sidebar p{font-size:13px;line-height:1.6;margin:6px 0 0;color:#526b82}
+.htr-quote-sidebar ol{padding:0;margin:24px 0;list-style:none}
+.htr-quote-sidebar li{display:flex;align-items:flex-start;gap:12px;margin:0;padding:12px 0;border-bottom:1px solid #e9eff6;list-style:none}
+.htr-quote-sidebar li:before{display:none}
+.htr-quote-sidebar li>span{display:grid;place-items:center;flex:none;width:28px;height:28px;border-radius:50%;background:#0064d7;color:#fff;font-size:13px;font-weight:700}
+.htr-quote-sidebar li strong{font-size:14px}
+.htr-quote-reassurance{background:#eaf6ff;border-radius:12px;padding:16px}
+.htr-quote-reassurance strong{font-size:15px}
+.htr-quote-illustration img{display:block;width:100%;height:auto;max-height:260px;object-fit:contain}
+@media(max-width:960px){.htr-quote-layout{grid-template-columns:minmax(0,1fr);max-width:820px}.htr-quote-sidebar-content{padding:20px}.htr-quote-sidebar ol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px}}
+@media(max-width:600px){.htr-quote-layout .htr-quote-steps li:before{top:14.5px;left:calc(-50% + 14.5px);right:calc(50% + 14.5px)}.htr-quote-sidebar ol{grid-template-columns:1fr}}
+
+/* Keep Google address search light, including its shadow-DOM controls. */
+#htr-rr.htr-rr-wizard .htr-rr-search,
+.htr-rr-calculator [data-address-search]{color-scheme:light}
+#htr-rr.htr-rr-wizard .htr-rr-search gmp-place-autocomplete,
+.htr-rr-calculator [data-address-search] gmp-place-autocomplete{color-scheme:light;display:block;box-sizing:border-box;width:100%;min-height:52px;background:#fff;color:#102c49;border:1px solid #cbdced;border-radius:12px;box-shadow:0 2px 6px #143b620a;font:inherit;transition:border-color .15s,box-shadow .15s}
+#htr-rr.htr-rr-wizard .htr-rr-search gmp-place-autocomplete:focus-within,
+.htr-rr-calculator [data-address-search] gmp-place-autocomplete:focus-within{border-color:#0064d7;box-shadow:0 0 0 3px #0064d71f}
+@media(prefers-reduced-motion:reduce){.htr-rr-search gmp-place-autocomplete{transition:none}}
+
+/* Compact quote spacing while retaining comfortable control targets. */
+.htr-quote-layout{gap:16px}
+#htr-rr.htr-rr-wizard{padding:12px}
+#htr-rr.htr-rr-wizard [data-card]{padding:16px 8px 8px}
+#htr-rr.htr-rr-wizard h3{margin:0 0 6px}
+#htr-rr.htr-rr-wizard .htr-rr-sub{margin:0 0 12px;line-height:1.5}
+#htr-rr.htr-rr-wizard .htr-quote-steps{padding-top:10px!important}
+#htr-rr.htr-rr-wizard .htr-quote-steps li{gap:5px;padding-bottom:10px}
+#htr-rr.htr-rr-wizard .htr-quote-nav{margin-top:16px;gap:10px}
+#htr-rr.htr-rr-wizard .htr-rr-btn{padding:11px 16px;min-height:44px}
+#htr-rr.htr-rr-wizard .htr-quote-illustration{max-width:340px;margin:10px auto 0}
+#htr-rr.htr-rr-wizard .htr-rr-confirm{gap:10px;margin-bottom:10px}
+#htr-rr.htr-rr-wizard .htr-rr-materials{gap:8px}
+#htr-rr.htr-rr-wizard .htr-rr-search gmp-place-autocomplete,
+.htr-rr-calculator [data-address-search] gmp-place-autocomplete{min-height:46px;border-radius:9px}
+.htr-quote-sidebar-content{padding:16px}
+.htr-quote-sidebar h2{font-size:22px;margin-bottom:6px}
+.htr-quote-sidebar p{margin-top:4px;line-height:1.5}
+.htr-quote-sidebar ol{margin:14px 0}
+.htr-quote-sidebar li{padding:9px 0;gap:10px}
+.htr-quote-reassurance{padding:12px}
+.htr-quote-sidebar-photo img{height:150px}
+@media(max-width:600px){#htr-rr.htr-rr-wizard{padding:8px}#htr-rr.htr-rr-wizard [data-card]{padding:14px 4px 6px}.htr-quote-sidebar-content{padding:14px}}

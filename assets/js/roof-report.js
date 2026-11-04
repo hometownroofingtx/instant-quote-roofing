@@ -7,6 +7,8 @@
   document.querySelectorAll('#htr-rr, [data-htr-search-redirect], [data-htr-calculator]').forEach(function (root) {
   var redirect = root.dataset.htrSearchRedirect;
   var calculator = root.hasAttribute('data-htr-calculator');
+  var quoteCopy = {};
+  try { quoteCopy = JSON.parse(root.dataset.quoteCopy || '{}'); } catch (e) {}
   var selectedPlaceId = null;
 
   var state = { lat: null, lng: null, address: '', city: '', zip: '', material: '', map: null, marker: null, report: null };
@@ -33,7 +35,20 @@
     root.dataset.step = String(n);
   }
   function show(id, msg) { var el = redirect || calculator ? $('[data-address-error]') : $(id); el.textContent = msg || ''; el.hidden = !msg; }
-  function focusCard(n) { var c = $('[data-card="' + n + '"]'); if (c && c.scrollIntoView) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  function focusCard(n) {
+    if (root.classList.contains('htr-rr-wizard')) {
+      root.dataset.step = String(n);
+      $$('[data-card]').forEach(function (card) { card.hidden = Number(card.dataset.card) !== n; });
+      $$('[data-quote-step]').forEach(function (item) {
+        var step = Number(item.dataset.quoteStep);
+        item.classList.toggle('is-complete', step < n);
+        if (step === n) item.setAttribute('aria-current', 'step'); else item.removeAttribute('aria-current');
+      });
+    }
+    var c = $('[data-card="' + n + '"]');
+    if (c) { c.tabIndex = -1; c.focus({ preventScroll: true }); }
+    if (c && c.scrollIntoView) c.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  }
 
   /* ---------- Google loader (official dynamic bootstrap) ---------- */
   function loadGoogle(key) {
@@ -115,6 +130,7 @@
       $('[data-calc-address]').textContent = state.address;
       show('#htr-rr-err1', '');
       $('[data-calc-property]').hidden = false;
+      preview();
       showMap().catch(function () { show('#htr-rr-err1', 'The map could not load. You can still use your selected address.'); });
       return;
     }
@@ -122,6 +138,7 @@
   }
 
   function pick(lat, lng, address, comps) {
+    if (state.mapLocked) return;
     // A city or ZIP alone would put the pin in the town centre and measure the wrong building.
     if (comps && comps.length && !comp(comps, 'street_number') && !comp(comps, 'premise')) {
       show('#htr-rr-err1', 'Please pick your full street address with the house number, not just the city.');
@@ -139,15 +156,21 @@
     unlock(2);
     showMap();
     preview();
-    focusCard(2);
+    if (!root.classList.contains('htr-rr-wizard')) focusCard(2);
   }
 
   /* Step 2 property card: roof preview from Google (cached on the server, shared with the final report). */
   var pvTimer = null, pvSeq = 0;
-  function previewSoon() { if (calculator) return; clearTimeout(pvTimer); pvSeq++; pvTimer = setTimeout(preview, 700); }
+  function previewBusy(busy) {
+    state.previewPending = busy;
+    var button = $(calculator ? '[data-calc-address-next]' : '#htr-rr-confirm');
+    if (button) { button.disabled = busy; button.setAttribute('aria-busy', String(busy)); }
+  }
+  function previewSoon() { clearTimeout(pvTimer); pvSeq++; previewBusy(true); pvTimer = setTimeout(preview, 700); }
   async function preview() {
-    if (calculator || state.lat == null || state.lng == null) return;
+    if (state.lat == null || state.lng == null) return;
     var seq = ++pvSeq, facts = $('#htr-rr-facts'), note = $('#htr-rr-propnote');
+    previewBusy(true);
     note.classList.remove('htr-rr-error');
     facts.innerHTML = '<div><dt>Roof area</dt><dd>Measuring&hellip;</dd></div>';
     try {
@@ -163,14 +186,16 @@
         : (j.markerOnRoof ? 'From Google aerial imagery. Move the pin to update.' : 'The pin looks off the roof - drag it onto your house so we measure the right building.');
       note.classList.toggle('htr-rr-error', j.areaSqft < 400 || !j.markerOnRoof);
     } catch (e) { if (seq === pvSeq) { facts.innerHTML = ''; note.textContent = 'Preview not available right now. You can still continue.'; } }
+    finally { if (seq === pvSeq) previewBusy(false); }
   }
 
   /* ---------- GHL form at the contact step (1.1.0) ----------
    * The report is saved and priced first (prepare), then the GHL form is shown with the report number and roof type
-   * pre-filled. Polling confirms that n8n linked the submission. A GHL form message triggers an earlier status check;
-   * only server-confirmed linking reveals the report. */
+   * pre-filled. A verified iframe submission or server-confirmed contact link reveals the prepared estimate.
+   * Browser completion never changes lead status; n8n remains responsible for linking contact details. */
   var ghlMode = C.contactMode === 'ghl_form' && !!C.ghlFormId;
   function embedGhlForm(box, prep, onDone) {
+    if (box._ghlCleanup) box._ghlCleanup();
     var q = new URLSearchParams();
     q.set('htr_report_id', String(prep.report_id));
     q.set('htr_lead_type', prep.lead_type || '');
@@ -179,6 +204,7 @@
     if (street) q.set('address', street);
     if (state.city) q.set('city', state.city);
     q.set('state', 'TX');
+    q.set('country', 'US');
     if (state.zip) q.set('postal_code', state.zip);
     var fid = C.ghlFormId, id = 'inline-' + fid;
     box.innerHTML = '<iframe src="' + esc(C.ghlFormBase + encodeURIComponent(fid) + '?' + q.toString()) + '" style="width:100%;height:100%;min-height:780px;border:none;border-radius:8px" id="' + esc(id) + '"' +
@@ -190,12 +216,46 @@
     if (!document.querySelector('script[data-htr-ghl-embed]')) {
       var s = document.createElement('script'); s.src = 'https://link.msgsndr.com/js/form_embed.js'; s.async = true; s.setAttribute('data-htr-ghl-embed', '1'); document.body.appendChild(s);
     }
-    var finished = false, polls = 0, timer = null;
+    var finished = false, polls = 0, timer = null, contactPayload = null, submissionMarker = null;
+    function saveContact() {
+      var target = calculator ? $('[data-calc-result]') : $('#htr-rr-result');
+      if (!target) return;
+      var notice = document.createElement('div'); notice.className = 'htr-rr-alert'; notice.setAttribute('role', 'status');
+      var text = document.createElement('p'); notice.appendChild(text); target.appendChild(notice);
+      if (!contactPayload || !submissionMarker || contactPayload.location !== submissionMarker.location || contactPayload.fingerprint !== submissionMarker.fingerprint || !prep.contact_key) {
+        text.textContent = 'Your form was submitted in GHL, but contact details were not received by this report. Please contact our team with report #' + prep.report_id + '.';
+        if (!calculator) focusCard(6);
+        return;
+      }
+      var source = contactPayload.contact;
+      var contact = { first_name: source.first_name || source.firstName || '', last_name: source.last_name || source.lastName || '', email: source.email || '', phone: source.phone || source.phone_number || source.phoneNumber || '' };
+      if (!contact.first_name && !contact.last_name && (source.full_name || source.name)) {
+        var names = String(source.full_name || source.name).trim().split(/\s+/); contact.first_name = names.shift(); contact.last_name = names.join(' ');
+      }
+      var retry = document.createElement('button'); retry.type = 'button'; retry.className = 'htr-rr-btn htr-rr-btn--ghost'; retry.textContent = 'Retry saving contact details'; retry.hidden = true; notice.appendChild(retry);
+      var attempts = 0, saving = false;
+      async function save() {
+        if (saving) return; saving = true; retry.hidden = true; text.textContent = 'Saving your contact details to this report…';
+        try {
+          var response = await api('save_contact', { token: prep.report.token, contact_key: prep.contact_key, expires: prep.contact_expires, contact: contact });
+          if (!response.ok || !response.json || !response.json.saved) throw new Error('not saved');
+          text.textContent = 'Contact details saved to this report.';
+          if (response.json.phone_saved === false) text.textContent = 'Your contact details were saved, but GHL did not provide a usable phone number. Please contact our team to add your number.';
+          notice.className = 'htr-rr-note';
+          if (!calculator && root.classList.contains('htr-rr-wizard')) focusCard(6);
+        } catch (e) {
+          if (++attempts < 3) { text.textContent = 'Retrying contact save…'; window.setTimeout(save, attempts * 1500); }
+          else { text.textContent = 'Your form was submitted in GHL, but contact details could not be saved to this report. Please retry before closing this page.'; retry.hidden = false; if (!calculator) focusCard(6); }
+        } finally { saving = false; }
+      }
+      retry.addEventListener('click', function () { attempts = 0; save(); });
+      save();
+    }
     function finish(why) {
       if (finished) return; finished = true; prep._done = true;
       clearInterval(timer); window.removeEventListener('message', onMsg);
       if (window.console) console.log('HTR-RR: GHL form done (' + why + ')');
-      onDone(prep);
+      try { onDone(prep); } finally { if (prep.contactSubmitted) saveContact(); }
     }
     var checking = false;
     async function checkLinked() {
@@ -215,13 +275,41 @@
       if (!frame || ev.source !== frame.contentWindow) return;
       var expectedOrigin;
       try { expectedOrigin = new URL(frame.src).origin; } catch (e) { return; }
-      if (ev.origin !== expectedOrigin) return;
-      var text;
-      try { text = typeof ev.data === 'string' ? ev.data : JSON.stringify(ev.data); } catch (e) { return; }
-      if (/form[-_ ]?submit(ted)?|submission|thank[-_ ]?you/i.test(text)) checkLinked();
+      // GHL can redirect its iframe between its own hosted form domains.
+      var origin;
+      try { origin = new URL(ev.origin); } catch (e) { return; }
+      var provider = origin.protocol === 'https:' && /(^|\.)(leadconnectorhq\.com|msgsndr\.com|gohighlevel\.com)$/.test(origin.hostname);
+      if (ev.origin !== expectedOrigin && !provider) return;
+      var data = ev.data;
+      if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) {} }
+      if (Array.isArray(data) && data[0] === 'set-sticky-contacts' && data[1] === '_ud' && typeof data[2] === 'string' && data[2].length < 65536) {
+        try {
+          var received = JSON.parse(data[2]);
+          if (received && typeof received === 'object' && !Array.isArray(received)) contactPayload = { contact: received, location: data[3], fingerprint: data[4] };
+        } catch (e) {}
+        return;
+      }
+      // Current GHL hosted forms emit this iframe-specific sticky marker only after a successful submission.
+      // Generic _ud/sticky restoration messages are not submission confirmations.
+      if (Array.isArray(data) && data[0] === 'set-sticky-contacts' &&
+          data[1] === 'embedded_iframe_' + frame.id && data[2] === frame.id &&
+          typeof data[3] === 'string' && data[3].trim() && typeof data[4] === 'string' && data[4].trim()) {
+        prep.contactSubmitted = true;
+        submissionMarker = { location: data[3], fingerprint: data[4] };
+        finish('verified GHL iframe submission');
+        return;
+      }
+      var event = typeof data === 'string' ? data : Array.isArray(data) ? data[0] : data && (data.type || data.event || data.action || data.message);
+      if (data && typeof data === 'object' && data.success === false) return;
+      if (typeof event !== 'string') return;
+      if (/^(?:(?:msgsndr|ghl)[-_: ])?(?:form[-_ ]?submit(?:ted)?|form[-_ ]?submission|submission[-_ ]?(?:success|complete)|thank[-_ ]?you)$/i.test(event)) {
+        prep.contactSubmitted = true;
+        finish('verified form submission');
+      }
     }
     window.addEventListener('message', onMsg);
-    // Server-confirmed linking is authoritative; an iframe message only triggers a check.
+    box._ghlCleanup = function () { finished = true; clearInterval(timer); window.removeEventListener('message', onMsg); };
+    // Server linking remains a fallback if a form does not emit a supported completion message.
     timer = setInterval(function () {
       if (++polls > 450) {
         clearInterval(timer); window.removeEventListener('message', onMsg);
@@ -237,8 +325,32 @@
   function initCalculator() {
     var inputs = $('[data-calc-inputs]'), lead = $('[data-calc-lead]'), result = $('[data-calc-result]');
     var submitted = false;
+    var stages = $$('[data-calc-stage]');
+    function stage(number, focus) {
+      if (!stages.length) return;
+      root.dataset.calcStep = String(number);
+      stages.forEach(function (panel) { panel.hidden = Number(panel.dataset.calcStage) !== number; });
+      $$('.htr-estimate-main > .htr-rr-card').forEach(function (card) { card.hidden = !card.querySelector('[data-calc-stage="' + number + '"]'); });
+      $$('[data-calc-progress]').forEach(function (item) {
+        var active = Number(item.dataset.calcProgress) === number;
+        if (active) item.setAttribute('aria-current', 'step'); else item.removeAttribute('aria-current');
+        item.classList.toggle('is-complete', Number(item.dataset.calcProgress) < number);
+      });
+      var panel = $('[data-calc-stage="' + number + '"]');
+      if (focus && panel) panel.focus();
+    }
+    stage(1, false);
+    $$('[data-calc-back]').forEach(function (button) { button.addEventListener('click', function () { if (!state.mapLocked) stage(Number(button.dataset.calcBack), true); }); });
+    var addressNext = $('[data-calc-address-next]');
+    if (addressNext) addressNext.addEventListener('click', function () {
+      if (state.previewPending) return;
+      if (!state.lat || !state.lng || !state.address) { show('#htr-rr-err1', 'Please select your full address from the suggestions.'); return; }
+      stage(3, true);
+      if (ghlMode && cont && !state.mapLocked) cont.click();
+    });
+    if (stages.length) root.addEventListener('invalid', function (event) { var panel = event.target.closest('[data-calc-stage]'); if (panel) stage(Number(panel.dataset.calcStage), false); }, true);
     function data() {
-      return { material: inputs.elements.material.value, area_sqft: inputs.elements.area_sqft.value, pitch_x12: inputs.elements.pitch_x12.value, faces: inputs.elements.faces.value, town: inputs.elements.town.value, lat: state.lat, lng: state.lng };
+      return { material: inputs.elements.material.value, measurement_mode: 'aerial', lat: state.lat, lng: state.lng };
     }
     function error(message) { var el = $('[data-calc-error]'); el.textContent = message || ''; el.hidden = !message; }
     function invalidate() { if (!submitted) { result.hidden = true; result.textContent = ''; } }
@@ -249,33 +361,37 @@
       ev.preventDefault();
       if (!inputs.reportValidity()) return;
       var search = $('[data-address-search] gmp-place-autocomplete');
+      if (stages.length) { stage(2, true); if (search) search.focus(); return; }
       if (!state.address && search) search.focus();
       else if (lead) lead.elements.first_name.focus();
       else if (cont) cont.focus();
     });
     function renderEstimate(j) {
         var e = j.estimate;
+        if (!e || !e.ok) { result.innerHTML = '<h3>Your Estimate</h3><p>We could not automatically measure this roof. Our team will confirm your measurements and prepare your estimate after an on-site inspection.</p>'; result.hidden = false; stage(4, true); return; }
         var row = function (k, v) { return '<div><dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd></div>'; };
         result.innerHTML = '<div class="htr-rr-calc-range"><span>Estimated roof price</span><strong>' + (e.low == null ? 'On-site quote' : money(e.low) + ' – ' + money(e.high)) + '</strong><p>' + esc(e.material_label + ' · ' + j.town) + '</p>' + (e.low == null ? '' : '<div class="htr-rr-calc-bounds"><div><span>Low estimate</span><b>' + esc(money(e.low)) + '</b></div><div><span>High estimate</span><b>' + esc(money(e.high)) + '</b></div></div>') + '</div>' +
           (e.low == null ? '<p>' + esc(e.reason) + '</p>' : '') + '<h4>How it is calculated</h4><dl class="htr-rr-calc-breakdown">' +
-          row('Roof area entered', Number(e.area_sqft).toLocaleString('en-US') + ' sq ft') + row('Extra area allowance', j.waste + '%') +
+          row('Estimated roof area', Number(e.area_sqft).toLocaleString('en-US') + ' sq ft') + row('Extra area allowance', j.waste + '%') +
           row('Area used for pricing', Number(e.billed_sqft).toLocaleString('en-US') + ' sq ft') + row('Base rate', money(e.rate_low) + ' – ' + money(e.rate_high) + ' / sq ft') +
           row('Pitch adjustment', '× ' + e.pitch_mult) + row('Roof complexity (' + e.complexity + ')', '× ' + e.complexity_mult) + row('Regional adjustment', '× ' + e.region_mult) + '</dl><p class="htr-rr-sub">Area × rate × pitch × complexity × region. Rounded to the nearest $25.</p>';
         result.hidden = false;
+        stage(4, true);
     }
     var cont = $('[data-calc-continue]');
     if (ghlMode && cont) {
       cont.addEventListener('click', async function () {
+        if (cont.disabled || state.mapLocked) return;
         if (!inputs.reportValidity()) return;
         if (!state.lat || !state.lng || !state.address) { show('#htr-rr-err1', 'Please select your full address from the suggestions.'); var s = $('[data-address-search] gmp-place-autocomplete'); if (s) s.focus(); return; }
         var payload = data(), status = $('[data-calc-status]');
         payload.address = state.address; payload.city = state.city; payload.zip = state.zip; payload.source_url = location.href; payload.website = '';
-        cont.disabled = true; status.textContent = 'Preparing your estimate…';
+        cont.disabled = true; cont.hidden = true; status.textContent = 'Loading your contact form…';
         state.mapLocked = true;
         $('[data-address-search]').setAttribute('inert', '');
         Array.prototype.forEach.call(inputs.elements, function (el) { el.disabled = true; });
         try {
-          var out = await api('calculator_prepare', payload), j = out.json || {};
+          var out = await api('calculator_draft_prepare', payload), j = out.json || {};
           if (!out.ok || !j.ok) throw new Error(j.message || 'Could not prepare your estimate. Please try again.');
           cont.hidden = true; status.textContent = 'Last step: add your contact details to see your estimate.';
           embedGhlForm($('[data-calc-ghl]'), j, function (prep) {
@@ -283,7 +399,7 @@
             $('[data-calc-ghl]').hidden = true;
             if (prep.report && prep.report.url) result.insertAdjacentHTML('beforeend', '<div class="htr-rr-actions"><a class="htr-rr-btn" href="' + esc(prep.report.url) + '&print=1" target="_blank" rel="noopener">Download report (PDF)</a></div>');
           });
-        } catch (err) { state.mapLocked = false; $('[data-address-search]').removeAttribute('inert'); status.textContent = err.message; cont.disabled = false; Array.prototype.forEach.call(inputs.elements, function (el) { el.disabled = false; }); }
+        } catch (err) { state.mapLocked = false; $('[data-address-search]').removeAttribute('inert'); status.textContent = err.message; cont.disabled = false; cont.hidden = false; cont.textContent = 'Retry loading contact form'; Array.prototype.forEach.call(inputs.elements, function (el) { el.disabled = false; }); }
       });
     }
     if (lead) lead.addEventListener('submit', async function (ev) {
@@ -334,6 +450,18 @@
   $('#htr-rr-edit').addEventListener('click', function () {
     focusCard(1); var ac = document.getElementById('htr-rr-ac'); if (ac && ac.focus) ac.focus();
   });
+  if (root.classList.contains('htr-rr-wizard')) {
+    focusCard(1);
+    $('[data-quote-find]').addEventListener('click', function () {
+      if (state.lat == null || state.lng == null) { show('#htr-rr-err1', 'Please select your full address from the suggestions.'); return; }
+      unlock(2); focusCard(2); showMap().catch(function () { $('#htr-rr-confirm').disabled = !!state.previewPending; });
+    });
+    $$('[data-quote-back]').forEach(function (button) { button.addEventListener('click', function () { if (!state.mapLocked) focusCard(Number(button.dataset.quoteBack)); }); });
+    $('[data-quote-contact]').addEventListener('click', function () {
+      if (!state.material) return;
+      unlock(4); focusCard(4); if (ghlMode) ghlPrepare();
+    });
+  }
 
   /* Use my current location: browser location -> reverse geocode. */
   $('#htr-rr-geo').addEventListener('click', function () {
@@ -373,36 +501,59 @@
     } else {
       state.map.setCenter(pos); state.map.setZoom(20); state.marker.setPosition(pos);
     }
-    if (!calculator) $('#htr-rr-confirm').disabled = false;
+    if (!calculator) $('#htr-rr-confirm').disabled = !!state.previewPending;
   }
-  $('#htr-rr-confirm').addEventListener('click', function () { unlock(3); focusCard(3); });
+  $('#htr-rr-confirm').addEventListener('click', function () { if (state.previewPending) return; unlock(3); focusCard(3); });
 
   /* ---------- Step 3: roof type ---------- */
   $$('.htr-rr-mat').forEach(function (b) {
     b.addEventListener('click', function () {
+      if (state.mapLocked) return;
       state.material = b.dataset.mat;
       $$('.htr-rr-mat').forEach(function (x) { x.setAttribute('aria-checked', x === b ? 'true' : 'false'); });
-      unlock(4); focusCard(4);
-      if (ghlMode) ghlPrepare();
+      if (root.classList.contains('htr-rr-wizard')) { $('[data-quote-contact]').disabled = false; }
+      else { unlock(4); focusCard(4); if (ghlMode) ghlPrepare(); }
     });
   });
 
-  /* GHL form mode: save + price the report, then show the GHL form. A new pin or roof type prepares a new report. */
-  var ghlKey = '';
+  /* Keep one pending report while the customer compares roof types at the same location. */
+  var ghlKey = '', ghlRenderedKey = '', ghlDraft = null, ghlPending = false;
   async function ghlPrepare() {
-    var key = [state.lat, state.lng, state.material].join('|'), box = $('#htr-rr-ghl');
-    if (!box || key === ghlKey) return;
-    ghlKey = key; show('#htr-rr-err4', '');
+    var position = [state.lat, state.lng].join('|'), key = [position, state.material].join('|'), box = $('#htr-rr-ghl');
+    if (!box || state.mapLocked) return;
+    ghlKey = key;
+    if (ghlPending || key === ghlRenderedKey) return;
+    ghlPending = true; ghlRenderedKey = ''; show('#htr-rr-err4', '');
+    if (box._ghlCleanup) box._ghlCleanup();
     box.innerHTML = '<p class="htr-rr-note">Preparing your roof report…</p>';
     try {
-      var out = await api('prepare', { address: state.address, city: state.city, zip: state.zip, lat: state.lat, lng: state.lng, material: state.material, website: '', source_url: location.href }), j = out.json || {};
+      var payload, action;
+      if (ghlDraft && ghlDraft.position === position) {
+        var draft = ghlDraft.data;
+        action = 'reprice'; payload = { token: draft.report.token, contact_key: draft.contact_key, expires: draft.contact_expires, material: state.material };
+      } else {
+        action = 'draft_prepare'; payload = { address: state.address, city: state.city, zip: state.zip, lat: state.lat, lng: state.lng, material: state.material, website: '', source_url: location.href };
+      }
+      var out = await api(action, payload), j = out.json || {};
       if (!out.ok || !j.ok) throw new Error(j.message || 'Something went wrong. Please try again or call us.');
-      if (key !== ghlKey) return; // the customer changed the pin or roof type meanwhile
-      state.report = j.report;
-      embedGhlForm(box, j, function (prep) { unlock(6); progress(6); renderResult(prep.report); focusCard(6); });
-    } catch (e) { ghlKey = ''; box.innerHTML = ''; show('#htr-rr-err4', e.message); }
+      ghlDraft = { position: position, data: j };
+      if (key !== ghlKey) return;
+      ghlRenderedKey = key; state.report = j.report;
+      embedGhlForm(box, j, function (prep) {
+        state.mapLocked = true;
+        $$('.htr-rr-mat').forEach(function (button) { button.disabled = true; });
+        var search = $('#htr-rr-search'); if (search) search.setAttribute('inert', '');
+        unlock(6); progress(6); renderResult(prep.report);
+        if (prep.contactSubmitted && root.classList.contains('htr-rr-wizard')) { unlock(5); focusCard(5); }
+        else focusCard(6);
+      });
+    } catch (e) {
+      ghlRenderedKey = ''; box.innerHTML = ''; show('#htr-rr-err4', e.message);
+    } finally {
+      ghlPending = false;
+      if (key !== ghlKey && !state.mapLocked) ghlPrepare();
+    }
   }
-
   /* ---------- Step 4: contact + submit ---------- */
   if (!ghlMode) $('#htr-rr-form').addEventListener('submit', async function (ev) {
     ev.preventDefault();
@@ -431,8 +582,9 @@
     } catch (e) {
       clearTimeout(timer);
       root.dataset.step = '4';
+      focusCard(4);
       show('#htr-rr-err4', e.message);
-    } finally { btn.disabled = false; btn.textContent = 'Generate my roof report'; }
+    } finally { btn.disabled = false; btn.textContent = quoteCopy.submit || 'Generate my roof report'; }
   });
 
   function progress(n) {
@@ -476,6 +628,8 @@
       '<li><b>Financing</b>: flexible options for qualified homeowners.</li></ul></div>' +
       '<p class="htr-rr-fine">' + esc(r.disclaimer) + '</p>';
     $('#htr-rr-result').innerHTML = h;
+    var reportActions = $$('#htr-rr-result .htr-rr-actions > *');
+    ['download', 'email', 'details'].forEach(function (key, i) { if (quoteCopy[key] && reportActions[i]) reportActions[i].textContent = quoteCopy[key]; });
     $('#htr-rr-mail').addEventListener('click', mailCopy);
     if (r.measured) show3d(r);
   }

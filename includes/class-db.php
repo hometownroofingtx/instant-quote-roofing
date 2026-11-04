@@ -125,4 +125,22 @@ class HTR_RR_DB {
 		global $wpdb;
 		return $wpdb->update( self::reports(), $data, array( 'id' => (int) $id ) );
 	}
+	/** A browser capability may fill contact details once, never overwrite a linked report. */
+	public static function save_browser_contact( $id, array $data ) {
+		return self::update_waiting_report( $id, $data );
+	}
+	/** Unique report token makes retries/concurrent finalization idempotent. */
+	public static function insert_contact_report( array $data ) {
+		global $wpdb;
+		$previous = $wpdb->suppress_errors( true );
+		try { $inserted = $wpdb->insert( self::reports(), $data ); }
+		finally { $wpdb->suppress_errors( $previous ); }
+		if ( false !== $inserted ) { return (int) $wpdb->insert_id; }
+		$existing = self::get_by_token( $data['token'] );
+		return $existing && 'awaiting_form' !== $existing['lead_status'] ? (int) $existing['id'] : 0;
+	}
+	public static function update_waiting_report( $id, array $data ) {
+		global $wpdb;
+		return $wpdb->update( self::reports(), $data, array( 'id' => (int) $id, 'lead_status' => 'awaiting_form' ) );
+	}
 }

@@ -34,6 +34,8 @@ class HTR_RR_Settings {
 			// Contact step: 'plugin' = the plugin's own contact form (leads reach GHL through n8n); 'ghl_form' = the GHL form above is
 			// embedded at the contact step, so every lead is a real GHL form submission (1.1.0, Mark 4 Nov 2026).
 			'contact_mode'       => 'plugin',
+			'calculator_design'  => self::calculator_design_defaults(),
+			'quote_design'       => self::quote_design_defaults(),
 			'floating_enabled'   => 0,
 			'floating_page'      => 0,
 			'floating_position'  => 'right',
@@ -108,7 +110,93 @@ class HTR_RR_Settings {
 		$s     = array_merge( self::defaults(), is_array( $saved ) ? $saved : array() );
 		// Materials: keep every default key even if an older save lacks it.
 		$s['materials'] = array_merge( self::defaults()['materials'], is_array( $s['materials'] ) ? $s['materials'] : array() );
+		$s['calculator_design'] = array_merge( self::calculator_design_defaults(), is_array( $s['calculator_design'] ) ? $s['calculator_design'] : array() );
+		$s['quote_design'] = array_merge( self::quote_design_defaults(), is_array( $s['quote_design'] ) ? $s['quote_design'] : array() );
 		return $s;
+	}
+
+	public static function quote_design_fields() {
+		$fields = array();
+		$labels = array( 'Find Property', 'Confirm Property', 'Roof Type', 'Contact Info', 'Analyze', 'Roof Report' );
+		$headings = array( 'Find your property', 'Confirm your property', 'What type of roof do you have?', 'Your contact information', 'Analyzing your roof', 'Your roof report is ready' );
+		$descriptions = array( 'Start typing your full property address and pick it from the list.', 'Zoom in and drag the red pin onto your roof if it is not already there.', 'Pick the main roofing material on the house today.', 'We will send your roof report to this email.', 'We are checking your property and preparing your roof report.', 'Here is your roof analysis and estimated quote.' );
+		foreach ( $labels as $i => $label ) {
+			$n = $i + 1;
+			$fields[ 'step_' . $n . '_label' ] = array( 'Step ' . $n . ' progress label', $label );
+			$fields[ 'step_' . $n . '_heading' ] = array( 'Step ' . $n . ' heading', $headings[$i] );
+			$fields[ 'step_' . $n . '_description' ] = array( 'Step ' . $n . ' description', $descriptions[$i] );
+		}
+		return array_merge( $fields, array(
+			'sidebar_title' => array( 'Sidebar heading', 'Your roof quote, made simple.' ),
+			'sidebar_text' => array( 'Sidebar introduction', 'Find your home, choose your roof type, and get a personalized estimate.' ),
+			'reassurance_title' => array( 'Reassurance heading', 'No obligation. No guesswork.' ),
+			'reassurance_text' => array( 'Reassurance text', 'Aerial measurements help us prepare your estimate. Final pricing is confirmed during your inspection.' ),
+			'back' => array( 'Back button', 'Back' ), 'find' => array( 'Find button', 'Find Property' ),
+			'confirm' => array( 'Confirm button', 'Confirm & Continue' ), 'continue' => array( 'Continue button', 'Continue' ),
+			'location' => array( 'Current location link', 'Use my current location' ), 'edit' => array( 'Edit address link', 'Edit address' ),
+			'preview_heading' => array( 'Preview heading', 'Roof preview' ), 'preview_note' => array( 'Preview helper', 'From Google aerial imagery. Move the pin to update.' ),
+			'submit' => array( 'Plugin form submit button', 'Generate my roof report' ),
+			'working' => array( 'Analysis status', 'Preparing your report…' ),
+			'analysis_1' => array( 'Analysis checklist 1', 'Property confirmed' ), 'analysis_2' => array( 'Analysis checklist 2', 'Roof type selected' ),
+			'analysis_3' => array( 'Analysis checklist 3', 'Reading aerial imagery' ), 'analysis_4' => array( 'Analysis checklist 4', 'Measuring roof area and pitch' ), 'analysis_5' => array( 'Analysis checklist 5', 'Preparing your report' ),
+			'download' => array( 'Download button', 'Download report (PDF)' ), 'email' => array( 'Email button', 'Email me a copy' ), 'details' => array( 'Full details button', 'View full details online' ),
+		) );
+	}
+	public static function quote_design_defaults() {
+		$out = array( 'sidebar' => 0, 'property' => 0 );
+		foreach ( self::quote_design_fields() as $key => $field ) { $out[$key] = $field[1]; }
+		return $out;
+	}
+	public static function sanitize_quote_design( $input ) {
+		if ( ! is_array( $input ) ) { return new WP_Error( 'design', 'Invalid roof quote design settings.' ); }
+		$out = self::get( 'quote_design' );
+		foreach ( array( 'sidebar', 'property' ) as $key ) {
+			if ( ! isset( $input[$key] ) ) { continue; }
+			if ( ! is_numeric( $input[$key] ) ) { return new WP_Error( 'design', 'Choose a valid image from the Media Library.' ); }
+			$id = absint( $input[$key] );
+			if ( $id && ! wp_attachment_is_image( $id ) ) { return new WP_Error( 'design', 'Choose a valid image from the Media Library.' ); }
+			$out[$key] = $id;
+		}
+		foreach ( self::quote_design_fields() as $key => $field ) {
+			if ( isset( $input[$key] ) && is_string( $input[$key] ) ) { $out[$key] = sanitize_textarea_field( $input[$key] ); }
+		}
+		return $out;
+	}
+	public static function calculator_design_fields() {
+		return array(
+			'title' => array( 'Heading prefix', 'Instant' ), 'highlight' => array( 'Highlighted heading', 'Roof Estimate' ),
+			'intro' => array( 'Header description', 'Get a quick, personalized estimate for your roof replacement or repair in a few easy steps.' ),
+			'roof_heading' => array( 'Roof details heading', 'Step 1: Roof Details' ), 'roof_description' => array( 'Roof details description', 'Tell us about your roof so we can prepare your estimate.' ),
+			'address_heading' => array( 'Address heading', 'Step 2: Your Address' ), 'address_description' => array( 'Address description', 'Select your property address and position the pin on your roof.' ),
+			'contact_heading' => array( 'Contact heading', 'Step 3: Contact Information' ), 'contact_description' => array( 'Contact description', 'Add your contact details to receive your personalized roof estimate.' ),
+			'sidebar_title' => array( 'Sidebar heading', "Your Estimate\nis Just a Few\nSteps Away" ),
+			'guide_1_title' => array( 'Guide 1 heading', 'Enter your roof details' ), 'guide_1_text' => array( 'Guide 1 description', 'Type, size, pitch, and roof complexity.' ),
+			'guide_2_title' => array( 'Guide 2 heading', 'Add your property address' ), 'guide_2_text' => array( 'Guide 2 description', 'Confirm your location for accurate pricing.' ),
+			'guide_3_title' => array( 'Guide 3 heading', 'Provide your contact information' ), 'guide_3_text' => array( 'Guide 3 description', 'So we can follow up about your estimate.' ),
+			'guide_4_title' => array( 'Guide 4 heading', 'Get your estimate' ), 'guide_4_text' => array( 'Guide 4 description', 'View your price range and next steps.' ),
+			'reassurance_title' => array( 'Reassurance heading', 'No obligation.' ), 'reassurance_text' => array( 'Reassurance description', 'A preliminary estimate to help you plan. Final measurements and pricing are confirmed at your inspection.' ),
+			'footer' => array( 'Footer disclaimer', 'Preliminary estimate using dimensions you enter. Final pricing may vary after an on-site inspection.' ),
+		);
+	}
+	public static function calculator_design_defaults() {
+		$out = array( 'logo' => 0, 'background' => 0, 'sidebar' => 0 );
+		foreach ( self::calculator_design_fields() as $key => $field ) { $out[ $key ] = $field[1]; }
+		return $out;
+	}
+	public static function sanitize_calculator_design( $input ) {
+		if ( ! is_array( $input ) ) { return new WP_Error( 'design', 'Invalid calculator design settings.' ); }
+		$out = self::get( 'calculator_design' );
+		foreach ( array( 'logo', 'background', 'sidebar' ) as $key ) {
+			if ( ! isset( $input[ $key ] ) ) { continue; }
+			if ( ! is_scalar( $input[ $key ] ) || ! is_numeric( $input[ $key ] ) ) { return new WP_Error( 'design', 'Choose calculator images from the Media Library.' ); }
+			$id = absint( $input[ $key ] );
+			if ( $id && ! wp_attachment_is_image( $id ) ) { return new WP_Error( 'design', 'Choose valid calculator images from the Media Library.' ); }
+			$out[ $key ] = $id;
+		}
+		foreach ( self::calculator_design_fields() as $key => $field ) {
+			if ( isset( $input[ $key ] ) && is_string( $input[ $key ] ) ) { $out[ $key ] = 'sidebar_title' === $key ? sanitize_textarea_field( $input[ $key ] ) : sanitize_text_field( $input[ $key ] ); }
+		}
+		return $out;
 	}
 
 	public static function get( $key ) {

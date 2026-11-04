@@ -3,6 +3,7 @@
 require __DIR__ . '/pricing-test.php';
 require dirname( __DIR__ ) . '/includes/class-rest.php';
 define( 'HOUR_IN_SECONDS', 3600 );
+define( 'DAY_IN_SECONDS', 86400 );
 class WP_REST_Request {
  public $data;
  public function __construct( $data ) { $this->data = $data; }
@@ -14,7 +15,8 @@ class WP_REST_Response {
  public function __construct( $data, $status = 200 ) { $this->data = $data; $this->status = $status; }
 }
 function get_transient( $key ) { return $GLOBALS['transients'][ $key ] ?? false; }
-function set_transient( $key, $value, $ttl ) { $GLOBALS['transients'][ $key ] = $value; }
+function set_transient( $key, $value, $ttl ) { $GLOBALS['transients'][ $key ] = $value; return true; }
+function delete_transient( $key ) { unset( $GLOBALS['transients'][ $key ] ); }
 function current_user_can( $cap ) { return false; }
 function wp_unslash( $value ) { return $value; }
 function wp_salt( $scheme ) { return 'isolated-test'; }
@@ -25,7 +27,7 @@ function esc_url_raw( $value ) { return $value; }
 function wp_json_encode( $value ) { return json_encode( $value ); }
 class Calculator_Test_DB {
  public $insert_id = 0; public $last_error = '';
- public function insert( $table, $data ) { $this->insert_id++; $GLOBALS['report'] = $data; }
+ public function insert( $table, $data ) { $this->insert_id++; $GLOBALS['report'] = array_merge( $data, array( 'id' => $this->insert_id ) ); }
 }
 class HTR_RR_DB {
  public static function reports() { return 'isolated'; }
@@ -33,6 +35,16 @@ class HTR_RR_DB {
  public static function get_report( $id ) { return $GLOBALS['report']; }
  public static function get_by_token( $token ) { return ( $GLOBALS['report']['token'] ?? '' ) === $token ? $GLOBALS['report'] : null; }
  public static function log( $level, $source, $message, $id = null ) {}
+ public static function save_browser_contact( $id, $data ) {
+  if ( ! empty( $GLOBALS['fail_contact_save'] ) ) { return false; }
+  if ( 'awaiting_form' !== $GLOBALS['report']['lead_status'] ) { return 0; }
+  self::update_report( $id, $data ); return 1;
+ }
+ public static function update_waiting_report( $id, $data ) { return self::save_browser_contact( $id, $data ); }
+ public static function insert_contact_report( $data ) {
+  if ( ! empty( $GLOBALS['fail_contact_save'] ) ) { return 0; }
+  $GLOBALS['wpdb']->insert( self::reports(), $data ); return $GLOBALS['wpdb']->insert_id;
+ }
 }
 class HTR_RR_Leads {
  public static function send( $id ) { $GLOBALS['sent'][] = $id; }
@@ -41,7 +53,7 @@ class HTR_RR_Report_Page {
  public static function public_view( $r ) { return $r; }
 }
 class HTR_RR_Solar {
- public static function measure( $lat, $lng, $id = null ) { $GLOBALS['solar_calls']++; return array( 'ok' => false, 'message' => 'Fixture: no imagery' ); }
+ public static function measure( $lat, $lng, $id = null ) { $GLOBALS['solar_calls']++; return isset( $GLOBALS['solar_fixture'] ) ? $GLOBALS['solar_fixture'] : array( 'ok' => false, 'message' => 'Fixture: no imagery' ); }
 }
 $GLOBALS['saved'] = HTR_RR_Settings::defaults();
 $GLOBALS['wpdb'] = new Calculator_Test_DB();
@@ -112,4 +124,74 @@ check( count( $GLOBALS['sent'] ) === $sentBefore + 1, 'Duplicate link callbacks 
 $GLOBALS['transients'] = array();
 $prepared = HTR_RR_REST::prepare( new WP_REST_Request( array_merge( $valid, $contact ) ) );
 check( $prepared->data['ok'] && $GLOBALS['report']['request_source'] === 'instant_roof' && $GLOBALS['report']['lead_status'] === 'awaiting_form', 'Instant Roof GHL prepare keeps source and waiting status.' );
+$direct = array( 'token' => $GLOBALS['report']['token'], 'contact_key' => $prepared->data['contact_key'], 'expires' => $prepared->data['contact_expires'], 'contact' => $contact );
+$bad = $direct; $bad['contact_key'] = 'wrong';
+check( HTR_RR_REST::save_contact( new WP_REST_Request( $bad ) )->status === 403, 'Browser save rejects an invalid capability' );
+$bad = $direct; unset( $bad['contact_key'] );
+check( HTR_RR_REST::save_contact( new WP_REST_Request( $bad ) )->status === 400, 'Public report token alone cannot write contacts' );
+$bad = $direct; $bad['expires'] = time() - 1;
+check( HTR_RR_REST::save_contact( new WP_REST_Request( $bad ) )->status === 403, 'Expired capabilities rejected' );
+$bad = $direct; $bad['contact']['email'] = array();
+check( HTR_RR_REST::save_contact( new WP_REST_Request( $bad ) )->status === 400, 'Malformed contact fields rejected' );
+$bad = $direct; $bad['contact'] = array();
+check( HTR_RR_REST::save_contact( new WP_REST_Request( $bad ) )->status === 400, 'Empty contact data never records success' );
+$GLOBALS['fail_contact_save'] = true;
+check( HTR_RR_REST::save_contact( new WP_REST_Request( $direct ) )->status === 500 && $GLOBALS['report']['lead_status'] === 'awaiting_form', 'Database failures remain retryable and do not claim saved' );
+$GLOBALS['fail_contact_save'] = false;
+$sentBefore = count( $GLOBALS['sent'] );
+$result = HTR_RR_REST::save_contact( new WP_REST_Request( $direct ) );
+check( $result->data['saved'] && $GLOBALS['report']['first_name'] === 'Test' && $GLOBALS['report']['phone'] === '+12105550100', 'Direct browser save persists normalized contact data' );
+$GLOBALS['report']['lead_status'] = 'awaiting_form';
+$international = $direct; $international['contact']['phone'] = '+63 917 555 0123';
+$savedInternational = HTR_RR_REST::save_contact( new WP_REST_Request( $international ) );
+check( $savedInternational->data['phone_saved'] && $GLOBALS['report']['phone'] === '+639175550123', 'International GHL phone is preserved with country code' );
+check( $GLOBALS['report']['lead_status'] === 'ghl_submitted' && count( $GLOBALS['sent'] ) === $sentBefore, 'Direct save does not send a duplicate lead or depend on n8n' );
+$direct['contact']['first_name'] = 'Overwrite attempt';
+check( HTR_RR_REST::save_contact( new WP_REST_Request( $direct ) )->data['already_saved'] && $GLOBALS['report']['first_name'] === 'Test', 'Duplicate browser saves cannot overwrite linked contacts' );
+check( $GLOBALS['report']['request_source'] === 'instant_roof', 'Contact save preserves report source' );
+$GLOBALS['transients'] = array();
+$draft = HTR_RR_REST::prepare( new WP_REST_Request( array_merge( $valid, $contact ) ) );
+$draftId = $GLOBALS['wpdb']->insert_id;
+$solarBefore = $GLOBALS['solar_calls'];
+$selection = array( 'token' => $GLOBALS['report']['token'], 'contact_key' => $draft->data['contact_key'], 'expires' => $draft->data['contact_expires'], 'material' => 'metal' );
+$repriced = HTR_RR_REST::reprice( new WP_REST_Request( $selection ) );
+check( $repriced->data['ok'] && $GLOBALS['report']['material'] === 'metal', 'New roof selection updates pending report' );
+check( $GLOBALS['wpdb']->insert_id === $draftId && $GLOBALS['solar_calls'] === $solarBefore, 'Repricing neither inserts another report nor calls Solar again' );
+$bad = $selection; $bad['contact_key'] = 'wrong';
+check( HTR_RR_REST::reprice( new WP_REST_Request( $bad ) )->status === 403, 'Repricing requires report-specific authorization' );
+$GLOBALS['report']['lead_status'] = 'ghl_submitted';
+check( HTR_RR_REST::reprice( new WP_REST_Request( $selection ) )->status === 409, 'Submitted reports cannot be repriced' );
+$GLOBALS['transients'] = array();
+$before = $GLOBALS['wpdb']->insert_id;
+$draft = HTR_RR_REST::calculator_draft_prepare( new WP_REST_Request( array_merge( $valid, $contact ) ) );
+check( $draft->data['ok'] && strpos( $draft->data['report_id'], 'draft-' ) === 0, 'Frontend prepares an expiring draft reference' );
+check( $GLOBALS['wpdb']->insert_id === $before, 'Roof selection does not insert into Reports' );
+$selection = array( 'token' => $draft->data['report']['token'], 'contact_key' => $draft->data['contact_key'], 'expires' => $draft->data['contact_expires'], 'material' => 'metal' );
+check( HTR_RR_REST::reprice( new WP_REST_Request( $selection ) )->data['ok'] && $GLOBALS['wpdb']->insert_id === $before, 'Changing roof type only updates temporary draft' );
+$save = array_merge( $selection, array( 'contact' => $contact ) );
+$GLOBALS['fail_contact_save'] = true;
+check( HTR_RR_REST::save_contact( new WP_REST_Request( $save ) )->status === 500 && $GLOBALS['wpdb']->insert_id === $before, 'Failed finalization remains retryable without adding empty reports' );
+$GLOBALS['fail_contact_save'] = false;
+check( HTR_RR_REST::save_contact( new WP_REST_Request( $save ) )->data['saved'] && $GLOBALS['wpdb']->insert_id === $before + 1, 'Successful submission creates exactly one contact-complete report' );
+check( $GLOBALS['report']['first_name'] === 'Test' && $GLOBALS['report']['material'] === 'metal', 'Final report contains contact and latest roof selection' );
+check( HTR_RR_REST::save_contact( new WP_REST_Request( $save ) )->data['already_saved'] && $GLOBALS['wpdb']->insert_id === $before + 1, 'Repeated submission with draft key does not create duplicate reports' );
+$GLOBALS['transients'] = array();
+$before = $GLOBALS['wpdb']->insert_id;
+$draft = HTR_RR_REST::draft_prepare( new WP_REST_Request( array_merge( $valid, $contact ) ) );
+check( $draft->data['ok'] && $GLOBALS['wpdb']->insert_id === $before, 'Instant Roof draft also avoids empty Reports rows' );
+$linked = HTR_RR_REST::link_contact( new WP_REST_Request( array_merge( $contact, array( 'report_id' => $draft->data['report_id'] ) ) ) );
+check( $linked->data['linked'] && $GLOBALS['wpdb']->insert_id === $before + 1, 'Optional authenticated callback can finalize a draft reference' );
+$GLOBALS['transients'] = array();
+$before = $GLOBALS['wpdb']->insert_id;
+$solarBefore = $GLOBALS['solar_calls'];
+$aerial = $valid;
+unset( $aerial['area_sqft'], $aerial['pitch_x12'], $aerial['faces'], $aerial['town'] );
+$aerial['measurement_mode'] = 'aerial';
+$draft = HTR_RR_REST::calculator_draft_prepare( new WP_REST_Request( array_merge( $aerial, $contact ) ) );
+check( $draft->data['ok'] && $GLOBALS['solar_calls'] === $solarBefore + 1, 'Aerial calculator measures roof without customer dimensions' );
+check( $GLOBALS['wpdb']->insert_id === $before && ! $draft->data['estimate']['ok'], 'Missing imagery does not invent a price or create Reports entry' );
+$GLOBALS['solar_fixture'] = array_merge( HTR_RR_REST::calculator_measurements( $valid ), array( 'source' => 'solar', 'imagery_quality' => 'HIGH', 'marker_inside' => true, 'marker_off_m' => 0 ) );
+$GLOBALS['transients'] = array();
+$draft = HTR_RR_REST::calculator_draft_prepare( new WP_REST_Request( array_merge( $aerial, $contact ) ) );
+check( $draft->data['estimate']['ok'] && $GLOBALS['wpdb']->insert_id === $before, 'Available aerial measurements price a temporary calculator draft' );
 echo "Calculator checks passed. Total checks: $checks\n";

@@ -87,6 +87,10 @@ class HTR_RR_Admin {
 		if ( false !== strpos( $hook, 'htr-rr-settings' ) || false !== strpos( $hook, 'htr-rr-pricing' ) ) {
 			wp_enqueue_script( 'htr-rr-settings-admin', HTR_RR_URL . 'assets/js/settings-admin.js', array(), HTR_RR_VERSION . '.' . filemtime( HTR_RR_DIR . 'assets/js/settings-admin.js' ), true );
 		}
+		if ( false !== strpos( $hook, 'htr-rr-settings' ) ) {
+			wp_enqueue_media();
+			wp_enqueue_script( 'htr-rr-design-admin', HTR_RR_URL . 'assets/js/calculator-design-admin.js', array(), HTR_RR_VERSION . '.' . filemtime( HTR_RR_DIR . 'assets/js/calculator-design-admin.js' ), true );
+		}
 		if ( false !== strpos( $hook, 'htr-rr-pricing' ) ) {
 			wp_enqueue_media();
 			wp_enqueue_script( 'htr-rr-pricing-admin', HTR_RR_URL . 'assets/js/pricing-admin.js', array(), HTR_RR_VERSION . '.' . filemtime( HTR_RR_DIR . 'assets/js/pricing-admin.js' ), true );
@@ -126,8 +130,8 @@ class HTR_RR_Admin {
 	}
 
 	private static function status_pill( $s ) {
-		$map = array( 'completed' => 'ok', 'review' => 'warn', 'processing' => 'info', 'pending' => 'info', 'awaiting_form' => 'warn', 'sent' => 'ok', 'failed' => 'bad' );
-		$labels = array( 'completed' => 'Completed', 'review' => 'Needs review', 'processing' => 'Processing', 'pending' => 'Pending', 'awaiting_form' => 'Waiting for GHL form', 'sent' => 'Sent', 'failed' => 'Delivery failed' );
+		$map = array( 'completed' => 'ok', 'review' => 'warn', 'processing' => 'info', 'pending' => 'info', 'awaiting_form' => 'warn', 'ghl_submitted' => 'ok', 'sent' => 'ok', 'failed' => 'bad' );
+		$labels = array( 'completed' => 'Completed', 'review' => 'Needs review', 'processing' => 'Processing', 'pending' => 'Pending', 'awaiting_form' => 'Waiting for GHL form', 'ghl_submitted' => 'Form submitted (browser)', 'sent' => 'Sent', 'failed' => 'Delivery failed' );
 		return '<span class="htr-pill htr-pill--' . esc_attr( isset( $map[ $s ] ) ? $map[ $s ] : 'info' ) . ' htr-status--' . esc_attr( sanitize_key( $s ) ) . '">' . esc_html( $labels[ $s ] ?? ucfirst( $s ) ) . '</span>';
 	}
 
@@ -137,7 +141,7 @@ class HTR_RR_Admin {
 		$t   = HTR_RR_DB::reports();
 		// Portable SQL (no MySQL-only date functions): the 30-day cutoff is computed in PHP.
 		$cut = gmdate( 'Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS );
-		$c   = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) AS total, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed, SUM(CASE WHEN status='review' THEN 1 ELSE 0 END) AS review, SUM(CASE WHEN lead_status<>'sent' THEN 1 ELSE 0 END) AS lead_open, SUM(CASE WHEN created_at >= %s THEN 1 ELSE 0 END) AS last30 FROM $t", $cut ), ARRAY_A ); // phpcs:ignore
+		$c   = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) AS total, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed, SUM(CASE WHEN status='review' THEN 1 ELSE 0 END) AS review, SUM(CASE WHEN lead_status NOT IN ('sent','ghl_submitted') THEN 1 ELSE 0 END) AS lead_open, SUM(CASE WHEN created_at >= %s THEN 1 ELSE 0 END) AS last30 FROM $t", $cut ), ARRAY_A ); // phpcs:ignore
 		$sum = $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM((price_low+price_high)/2.0),0) FROM $t WHERE price_low IS NOT NULL AND created_at >= %s", $cut ) ); // phpcs:ignore
 		self::head( 'Instant Roof Report', 'Roof estimates, customer reports and lead delivery in one place.' );
 		$s = HTR_RR_Settings::all();
@@ -449,7 +453,7 @@ class HTR_RR_Admin {
 	public static function settings() {
 		$s = HTR_RR_Settings::all();
 		self::head( 'Settings', 'Manage integrations, customer messaging and report limits.' );
-		self::settings_tabs( array( 'maps' => 'Maps & measurements', 'leads' => 'Lead delivery', 'customer' => 'Customer information', 'consent' => 'SMS consent', 'usage' => 'Usage limits', 'floating' => 'Floating side tab', 'test' => 'Test Google Solar' ), 'settings' );
+		self::settings_tabs( array( 'maps' => 'Maps & measurements', 'leads' => 'Lead delivery', 'customer' => 'Customer information', 'design' => 'Calculator Design', 'quote-design' => 'Instant Roof Quote Design', 'consent' => 'SMS consent', 'usage' => 'Usage limits', 'floating' => 'Floating side tab', 'test' => 'Test Google Solar' ), 'settings' );
 		echo '<form class="htr-settings-form" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 		wp_nonce_field( 'htr_rr_save' );
 		echo '<input type="hidden" name="action" value="htr_rr_save"><input type="hidden" name="section" value="settings"><div class="htr-settings-grid">';
@@ -465,6 +469,8 @@ class HTR_RR_Admin {
 		echo '<tr><th><label for="contact_mode">Contact step</label></th><td><select id="contact_mode" name="contact_mode"><option value="plugin"' . selected( $s['contact_mode'], 'plugin', false ) . '>Plugin form (leads sent to GHL through n8n)</option><option value="ghl_form"' . selected( $s['contact_mode'], 'ghl_form', false ) . '>GHL form (the form ID above, embedded)</option></select><p class="description">GHL form: the customer fills in the GHL form itself, so every lead is a real form submission in GHL. The roof report is saved first and linked when the form is submitted. Switch back to Plugin form at any time.</p></td></tr>';
 		echo '</tbody></table></section>';
 		self::floating_tab_settings( $s );
+		self::calculator_design_settings( $s );
+		self::quote_design_settings( $s );
 		self::settings_card( 'Customer information', 'Contact details and estimate wording shown to homeowners.', 'admin-users', 'customer' );
 		self::field( 'company_phone', 'Company phone number', $s['company_phone'], 'Displayed on customer reports and the roof report form.' );
 		echo '<tr><th><label for="htr-settings-disclaimer">Estimate disclaimer</label></th><td><textarea id="htr-settings-disclaimer" name="disclaimer" rows="4">' . esc_textarea( $s['disclaimer'] ) . '</textarea><p class="description">Explains that the displayed price range is an estimate.</p></td></tr></tbody></table></section>';
@@ -486,6 +492,50 @@ class HTR_RR_Admin {
 			echo '<button type="button" role="tab" id="htr-settings-tab-' . esc_attr( $key ) . '" aria-controls="htr-settings-panel-' . esc_attr( $key ) . '" aria-selected="false" tabindex="-1" data-settings-tab="' . esc_attr( $key ) . '">' . esc_html( $label ) . '</button>';
 		}
 		echo '</nav>';
+	}
+	private static function quote_design_settings( array $s ) {
+		self::settings_card( 'Instant Roof Quote Design', 'Edit the six-step quote, sidebar and button text. Roof photos are managed under Pricing. GHL form fields remain editable in GHL.', 'art', 'quote-design' );
+		$design = $s['quote_design'];
+		foreach ( array( 'sidebar' => 'Sidebar photo', 'property' => 'Find property illustration' ) as $key => $label ) {
+			$id = (int) $design[$key];
+			echo '<tr class="htr-design-media-row"><th>' . esc_html( $label ) . '</th><td><div class="htr-design-image" data-design-image><input type="hidden" name="quote_design[' . esc_attr( $key ) . ']" value="' . $id . '"><div data-image-preview>' . ( $id ? wp_get_attachment_image( $id, 'medium' ) : '' ) . '</div><button type="button" class="button" data-choose-image>Choose image</button> <button type="button" class="button" data-clear-image>Use default</button><span role="status" class="screen-reader-text" data-image-status></span></div></td></tr>';
+		}
+		echo '</tbody></table><div class="htr-quote-editor">';
+		$groups = array();
+		foreach ( range( 1, 6 ) as $n ) { $groups[ 'Step ' . $n . ': ' . HTR_RR_Settings::quote_design_defaults()[ 'step_' . $n . '_label' ] ] = array( 'step_' . $n . '_label', 'step_' . $n . '_heading', 'step_' . $n . '_description' ); }
+		$groups['Sidebar & reassurance'] = array( 'sidebar_title', 'sidebar_text', 'reassurance_title', 'reassurance_text' );
+		$groups['Property preview'] = array( 'preview_heading', 'preview_note' );
+		$groups['Buttons & links'] = array( 'back', 'find', 'confirm', 'continue', 'location', 'edit', 'submit', 'download', 'email', 'details' );
+		$groups['Analysis checklist'] = array( 'working', 'analysis_1', 'analysis_2', 'analysis_3', 'analysis_4', 'analysis_5' );
+		$fields = HTR_RR_Settings::quote_design_fields();
+		foreach ( $groups as $title => $keys ) {
+			echo '<details class="htr-quote-editor-group"' . ( reset( $groups ) === $keys ? ' open' : '' ) . '><summary>' . esc_html( $title ) . '</summary><div class="htr-quote-editor-fields">';
+			foreach ( $keys as $key ) {
+				$multiline = (bool) preg_match( '/description|_text$|preview_note/', $key );
+				echo '<div class="htr-quote-editor-field' . ( $multiline ? ' is-wide' : '' ) . '"><label for="htr-quote-' . esc_attr( $key ) . '">' . esc_html( $fields[$key][0] ) . '</label>';
+				if ( $multiline ) { echo '<textarea id="htr-quote-' . esc_attr( $key ) . '" name="quote_design[' . esc_attr( $key ) . ']" rows="2">' . esc_textarea( $design[$key] ) . '</textarea>'; }
+				else { echo '<input type="text" id="htr-quote-' . esc_attr( $key ) . '" name="quote_design[' . esc_attr( $key ) . ']" value="' . esc_attr( $design[$key] ) . '">'; }
+				echo '</div>';
+			}
+			echo '</div></details>';
+		}
+		echo '</div></section>';
+	}
+	private static function calculator_design_settings( array $s ) {
+		self::settings_card( 'Calculator Design', 'Customize the calculator form and sidebar. An empty sidebar image selection uses the roof illustration.', 'art', 'design' );
+		$design = $s['calculator_design'];
+		foreach ( array( 'sidebar' => 'Sidebar photo' ) as $key => $label ) {
+			$id = (int) $design[ $key ];
+			echo '<tr class="htr-design-media-row"><th>' . esc_html( $label ) . '</th><td><div class="htr-design-image" data-design-image><input type="hidden" name="calculator_design[' . esc_attr( $key ) . ']" value="' . $id . '"><div data-image-preview>' . ( $id ? wp_get_attachment_image( $id, 'medium' ) : '' ) . '</div><button type="button" class="button" data-choose-image>Choose image</button> <button type="button" class="button" data-clear-image>Use default</button><span role="status" class="screen-reader-text" data-image-status></span></div></td></tr>';
+		}
+		foreach ( HTR_RR_Settings::calculator_design_fields() as $key => $field ) {
+			if ( in_array( $key, array( 'title', 'highlight', 'intro' ), true ) ) { continue; }
+			echo '<tr data-design-field="' . esc_attr( $key ) . '"><th><label for="htr-design-' . esc_attr( $key ) . '">' . esc_html( $field[0] ) . '</label></th><td>';
+			if ( 'sidebar_title' === $key ) { echo '<textarea id="htr-design-' . esc_attr( $key ) . '" name="calculator_design[' . esc_attr( $key ) . ']" rows="3">' . esc_textarea( $design[ $key ] ) . '</textarea>'; }
+			else { echo '<input id="htr-design-' . esc_attr( $key ) . '" name="calculator_design[' . esc_attr( $key ) . ']" value="' . esc_attr( $design[ $key ] ) . '">'; }
+			echo '</td></tr>';
+		}
+		echo '</tbody></table></section>';
 	}
 	private static function floating_tab_settings( array $s ) {
 		echo '<section class="htr-box htr-settings-card" data-settings-panel="floating"><h2>Floating side tab</h2><p>Configure links, icons, styling and page visibility in the dedicated settings screen.</p><a class="button" href="' . esc_url( admin_url( 'admin.php?page=htr-rr-floating' ) ) . '">Open Floating Side Tab Settings</a></section>';
@@ -690,7 +740,17 @@ class HTR_RR_Admin {
 				$bad[] = 'n8n shared secret (that looks like a Google key)';
 			}
 			$new['required_quality'] = isset( $_POST['required_quality'] ) && 'HIGH' === $_POST['required_quality'] ? 'HIGH' : 'MEDIUM'; // phpcs:ignore
+			if ( isset( $_POST['calculator_design'] ) ) {
+				$design = HTR_RR_Settings::sanitize_calculator_design( wp_unslash( $_POST['calculator_design'] ) );
+				if ( is_wp_error( $design ) ) { wp_die( esc_html( $design->get_error_message() ), 'Invalid calculator design', array( 'back_link' => true, 'response' => 400 ) ); }
+				$new['calculator_design'] = $design;
+			}
 			$new['contact_mode']     = isset( $_POST['contact_mode'] ) && 'ghl_form' === $_POST['contact_mode'] ? 'ghl_form' : 'plugin'; // phpcs:ignore
+			if ( isset( $_POST['quote_design'] ) ) {
+				$design = HTR_RR_Settings::sanitize_quote_design( wp_unslash( $_POST['quote_design'] ) );
+				if ( is_wp_error( $design ) ) { wp_die( esc_html( $design->get_error_message() ), 'Invalid quote design', array( 'back_link' => true, 'response' => 400 ) ); }
+				$new['quote_design'] = $design;
+			}
 			$new['disclaimer']       = sanitize_textarea_field( isset( $_POST['disclaimer'] ) ? wp_unslash( $_POST['disclaimer'] ) : '' ); // phpcs:ignore
 			$new['rate_limit_hour']  = min( 50, max( 1, (int) ( isset( $_POST['rate_limit_hour'] ) ? $_POST['rate_limit_hour'] : 5 ) ) ); // phpcs:ignore
 			$page                    = 'htr-rr-settings';

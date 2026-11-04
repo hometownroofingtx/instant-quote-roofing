@@ -1,3 +1,5 @@
 tests/.floating-preview.html
 tests/.settings-preview.html
 tests/.pricing-preview.html
+tests/.calculator-*-preview.html
+tests/.instant-preview.html

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Hometown Instant Roof Report
  * Description: Homeowners enter their address, confirm their roof on a satellite map, pick a roof type and get a roof measurement report with an estimated price range. Measurements: Google Solar API (free tier). Leads: sent to GoHighLevel through an n8n webhook. Shortcode: [htr_roof_report]
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Hometown Roofing & Restoration (Systems)
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'HTR_RR_VERSION', '1.1.0' );
+define( 'HTR_RR_VERSION', '1.2.0' );
 define( 'HTR_RR_FILE', __FILE__ );
 define( 'HTR_RR_DIR', plugin_dir_path( __FILE__ ) );
 define( 'HTR_RR_URL', plugin_dir_url( __FILE__ ) );
