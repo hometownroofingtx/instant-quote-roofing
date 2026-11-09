@@ -127,6 +127,13 @@ class HTR_RR_Settings {
 			$fields[ 'step_' . $n . '_description' ] = array( 'Step ' . $n . ' description', $descriptions[$i] );
 		}
 		return array_merge( $fields, array(
+            'journey_property' => array( 'Progress: property', 'Property & Roof Details' ),
+            'journey_contact' => array( 'Progress: contact', 'Contact Information' ),
+            'journey_report' => array( 'Progress: report', 'Your Roof Report' ),
+            'journey_heading' => array( 'Property step heading', 'Tell us about your property and roof' ),
+            'journey_description' => array( 'Property step introduction', 'Find your home, confirm the property, and choose your roof material.' ),
+            'journey_contact_heading' => array( 'Contact step heading', 'Where should we send your roof report?' ),
+            'journey_continue' => array( 'Contact navigation button', 'Continue to Contact Information' ),
 			'sidebar_title' => array( 'Sidebar heading', 'Your roof quote, made simple.' ),
 			'sidebar_text' => array( 'Sidebar introduction', 'Find your home, choose your roof type, and get a personalized estimate.' ),
 			'reassurance_title' => array( 'Reassurance heading', 'No obligation. No guesswork.' ),

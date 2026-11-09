@@ -88,7 +88,7 @@ class HTR_RR_Leads {
 		if ( ! $r ) {
 			return false;
 		}
-		if ( 'awaiting_form' === $r['lead_status'] ) { return false; }
+		if ( in_array( $r['lead_status'], array( 'awaiting_form', 'ghl_submitted' ), true ) ) { return false; }
 		if ( 'sent' === $r['lead_status'] ) {
 			return true; // never send the same lead twice.
 		}

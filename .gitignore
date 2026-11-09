@@ -3,3 +3,14 @@ tests/.settings-preview.html
 tests/.pricing-preview.html
 tests/.calculator-*-preview.html
 tests/.instant-preview.html
+
+tests/.instant-plugin-preview.html
+tests/.three-step-*.png
+
+tests/.report-layout-preview.html
+tests/.report-layout-admin-preview.html
+tests/.report-inline-preview.html
+tests/.report-contact-preview.html
+tests/.report-contact-bar.png
+tests/.report-print-*.pdf
+tests/.report-full-preview.html

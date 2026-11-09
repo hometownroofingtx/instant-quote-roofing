@@ -6,9 +6,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 $cfg = HTR_RR_Settings::public_config();
 $quote = HTR_RR_Settings::get( 'quote_design' );
 $quote_steps = array();
-foreach ( range( 1, 6 ) as $n ) { $quote_steps[] = $quote[ 'step_' . $n . '_label' ]; }
+$quote_steps = array( $quote['journey_property'], $quote['journey_contact'], $quote['journey_report'] );
 ?>
-<div class="htr-quote-layout"><div class="htr-rr htr-rr-wizard" id="htr-rr" data-step="1" data-quote-copy="<?php echo esc_attr( wp_json_encode( $quote ) ); ?>">
+<div class="htr-quote-layout"><div class="htr-rr htr-rr-wizard" id="htr-rr" data-step="1" data-journey="three" data-quote-copy="<?php echo esc_attr( wp_json_encode( $quote ) ); ?>">
  <ol class="htr-quote-steps" aria-label="Roof quote progress"><?php foreach ( $quote_steps as $i => $label ) : ?><li data-quote-step="<?php echo (int) $i + 1; ?>"><span><?php echo (int) $i + 1; ?></span><b><?php echo esc_html( $label ); ?></b></li><?php endforeach; ?></ol>
 	<?php if ( empty( $cfg['browserKey'] ) ) : ?>
 		<div class="htr-rr-alert htr-rr-alert--warn">
@@ -25,11 +25,12 @@ foreach ( range( 1, 6 ) as $n ) { $quote_steps[] = $quote[ 'step_' . $n . '_labe
 		</ul>
 	</header>
 
-	<div class="htr-rr-grid">
+	<p class="htr-quote-step-status" data-journey-status role="status">Step 1 of 3</p>
+    <div class="htr-rr-grid">
 		<!-- 1. Find your property -->
 		<section class="htr-rr-card" data-card="1">
-			<h3><span class="htr-rr-num">1</span> <?php echo esc_html( $quote['step_1_heading'] ); ?></h3>
-			<p class="htr-rr-sub"><?php echo esc_html( $quote['step_1_description'] ); ?></p>
+			<h3><?php echo esc_html( $quote['journey_heading'] ); ?></h3>
+			<p class="htr-rr-sub"><?php echo esc_html( $quote['journey_description'] ); ?></p>
 			<div class="htr-rr-search" id="htr-rr-search"><!-- Google address search is placed here --></div>
 			<button type="button" class="htr-rr-link" id="htr-rr-geo"><?php echo esc_html( $quote['location'] ); ?></button>
 			<p class="htr-rr-error" id="htr-rr-err1" role="alert" hidden></p>
@@ -39,7 +40,7 @@ foreach ( range( 1, 6 ) as $n ) { $quote_steps[] = $quote[ 'step_' . $n . '_labe
 
 		<!-- 2. Confirm your property -->
 		<section class="htr-rr-card" data-card="2" aria-disabled="true">
-			<h3><span class="htr-rr-num">2</span> <?php echo esc_html( $quote['step_2_heading'] ); ?></h3>
+			<h3><?php echo esc_html( $quote['step_2_heading'] ); ?></h3>
 			<p class="htr-rr-sub"><?php echo esc_html( $quote['step_2_description'] ); ?></p>
 			<div class="htr-rr-confirm">
 				<div class="htr-rr-mapwrap">
@@ -55,7 +56,7 @@ foreach ( range( 1, 6 ) as $n ) { $quote_steps[] = $quote[ 'step_' . $n . '_labe
 						<div><p class="htr-rr-addr" id="htr-rr-addr"></p><button type="button" class="htr-rr-link" id="htr-rr-edit"><?php echo esc_html( $quote['edit'] ); ?></button></div>
 					</div>
 					<h4><?php echo esc_html( $quote['preview_heading'] ); ?></h4>
-					<dl class="htr-rr-facts" id="htr-rr-facts"><div><dt>Roof area</dt><dd>&mdash;</dd></div></dl>
+					<dl class="htr-rr-facts" id="htr-rr-facts"><div><dt>Roof area</dt><dd>Not available</dd></div></dl>
 					<p class="htr-rr-note" id="htr-rr-propnote"><?php echo esc_html( $quote['preview_note'] ); ?></p>
 				</aside>
 			</div>
@@ -64,11 +65,11 @@ foreach ( range( 1, 6 ) as $n ) { $quote_steps[] = $quote[ 'step_' . $n . '_labe
 
 		<!-- 3. Roof type -->
 		<section class="htr-rr-card" data-card="3" aria-disabled="true">
-			<h3><span class="htr-rr-num">3</span> <?php echo esc_html( $quote['step_3_heading'] ); ?></h3>
+			<h3><?php echo esc_html( $quote['step_3_heading'] ); ?></h3>
 			<p class="htr-rr-sub"><?php echo esc_html( $quote['step_3_description'] ); ?></p>
 			<div class="htr-rr-materials" id="htr-rr-materials" role="radiogroup" aria-label="Roof type">
 				<?php foreach ( $cfg['materials'] as $m ) : ?>
-					<?php if ( 'other' === $m['key'] ) { continue; } ?>
+
 					<button type="button" role="radio" aria-checked="false" class="htr-rr-mat htr-rr-mat--<?php echo esc_attr( $m['key'] ); ?>" data-mat="<?php echo esc_attr( $m['key'] ); ?>">
 						<?php $roof_image = ! empty( $m['image_id'] ) ? wp_get_attachment_image( $m['image_id'], 'medium', false, array( 'class' => 'htr-rr-material-image', 'alt' => '', 'loading' => 'lazy' ) ) : ''; ?>
 						<?php if ( $roof_image ) : ?>
@@ -80,12 +81,13 @@ foreach ( range( 1, 6 ) as $n ) { $quote_steps[] = $quote[ 'step_' . $n . '_labe
 					</button>
 				<?php endforeach; ?>
 			</div>
-            <div class="htr-quote-nav"><button type="button" class="htr-rr-btn htr-rr-btn--ghost" data-quote-back="2"><?php echo esc_html( $quote['back'] ); ?></button><button type="button" class="htr-rr-btn" data-quote-contact disabled><?php echo esc_html( $quote['continue'] ); ?></button></div>
+            <div class="htr-quote-nav"><button type="button" class="htr-rr-btn htr-rr-btn--ghost" data-quote-back="2"><?php echo esc_html( $quote['back'] ); ?></button><button type="button" class="htr-rr-btn" data-quote-contact disabled><?php echo esc_html( $quote['journey_continue'] ); ?></button></div>
 		</section>
 
 		<!-- 4. Contact -->
 		<section class="htr-rr-card" data-card="4" aria-disabled="true">
-			<h3><span class="htr-rr-num">4</span> <?php echo esc_html( $quote['step_4_heading'] ); ?></h3>
+			<h3><?php echo esc_html( $quote['journey_contact_heading'] ); ?></h3>
+            <div class="htr-quote-summary" data-property-summary></div>
 			<p class="htr-rr-sub"><?php echo esc_html( $quote['step_4_description'] ); ?></p>
 			<?php if ( 'ghl_form' === $cfg['contactMode'] ) : ?>
 				<div class="htr-rr-ghl" id="htr-rr-ghl" aria-live="polite"></div>
@@ -119,7 +121,7 @@ foreach ( range( 1, 6 ) as $n ) { $quote_steps[] = $quote[ 'step_' . $n . '_labe
 
 		<!-- 5. Analysing -->
 		<section class="htr-rr-card" data-card="5" aria-disabled="true">
-			<h3><span class="htr-rr-num">5</span> <?php echo esc_html( $quote['step_5_heading'] ); ?></h3>
+			<h3><?php echo esc_html( $quote['step_5_heading'] ); ?></h3>
             <p class="htr-rr-sub"><?php echo esc_html( $quote['step_5_description'] ); ?></p>
 			<ol class="htr-rr-progress" id="htr-rr-progress" aria-live="polite">
 				<?php foreach ( range( 1, 5 ) as $n ) : ?><li data-p="<?php echo (int) $n; ?>"><?php echo esc_html( $quote[ 'analysis_' . $n ] ); ?></li><?php endforeach; ?>
@@ -129,7 +131,7 @@ foreach ( range( 1, 6 ) as $n ) { $quote_steps[] = $quote[ 'step_' . $n . '_labe
 
 		<!-- 6. Result -->
 		<section class="htr-rr-card htr-rr-card--wide" data-card="6" aria-disabled="true">
-			<h3><span class="htr-rr-num">6</span> <?php echo esc_html( $quote['step_6_heading'] ); ?></h3>
+			<h3><?php echo esc_html( $quote['step_6_heading'] ); ?></h3>
 			<p class="htr-rr-sub"><?php echo esc_html( $quote['step_6_description'] ); ?></p><div id="htr-rr-result"></div>
 		</section>
 	</div>
@@ -138,6 +140,6 @@ foreach ( range( 1, 6 ) as $n ) { $quote_steps[] = $quote[ 'step_' . $n . '_labe
 <aside class="htr-quote-sidebar" aria-label="About your roof quote">
  <?php if ( $quote['sidebar'] ) : ?><div class="htr-quote-sidebar-photo"><?php echo wp_get_attachment_image( $quote['sidebar'], 'large', false, array( 'alt' => '', 'loading' => 'lazy' ) ); ?></div><?php endif; ?>
  <div class="htr-quote-sidebar-content"><h2><?php echo esc_html( $quote['sidebar_title'] ); ?></h2><p><?php echo esc_html( $quote['sidebar_text'] ); ?></p>
- <ol><?php foreach ( $quote_steps as $i => $label ) : ?><li><span><?php echo (int) $i + 1; ?></span><div><strong><?php echo esc_html( $label ); ?></strong><p><?php echo esc_html( $quote['step_' . ( $i + 1 ) . '_description'] ); ?></p></div></li><?php endforeach; ?></ol>
+ <ol><?php foreach ( $quote_steps as $i => $label ) : ?><li><span><?php echo (int) $i + 1; ?></span><div><strong><?php echo esc_html( $label ); ?></strong><p><?php echo esc_html( array( $quote['journey_description'], $quote['step_4_description'], $quote['step_6_description'] )[ $i ] ); ?></p></div></li><?php endforeach; ?></ol>
  <div class="htr-quote-reassurance"><strong><?php echo esc_html( $quote['reassurance_title'] ); ?></strong><p><?php echo esc_html( $quote['reassurance_text'] ); ?></p></div></div>
 </aside></div>

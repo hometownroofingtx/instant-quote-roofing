@@ -501,8 +501,8 @@ class HTR_RR_Admin {
 			echo '<tr class="htr-design-media-row"><th>' . esc_html( $label ) . '</th><td><div class="htr-design-image" data-design-image><input type="hidden" name="quote_design[' . esc_attr( $key ) . ']" value="' . $id . '"><div data-image-preview>' . ( $id ? wp_get_attachment_image( $id, 'medium' ) : '' ) . '</div><button type="button" class="button" data-choose-image>Choose image</button> <button type="button" class="button" data-clear-image>Use default</button><span role="status" class="screen-reader-text" data-image-status></span></div></td></tr>';
 		}
 		echo '</tbody></table><div class="htr-quote-editor">';
-		$groups = array();
-		foreach ( range( 1, 6 ) as $n ) { $groups[ 'Step ' . $n . ': ' . HTR_RR_Settings::quote_design_defaults()[ 'step_' . $n . '_label' ] ] = array( 'step_' . $n . '_label', 'step_' . $n . '_heading', 'step_' . $n . '_description' ); }
+		$groups = array( 'Three-step journey' => array( 'journey_property', 'journey_contact', 'journey_report', 'journey_heading', 'journey_description', 'journey_contact_heading', 'journey_continue' ) );
+		foreach ( range( 1, 6 ) as $n ) { $groups[ 'Section ' . $n . ': ' . HTR_RR_Settings::quote_design_defaults()[ 'step_' . $n . '_label' ] ] = array( 'step_' . $n . '_label', 'step_' . $n . '_heading', 'step_' . $n . '_description' ); }
 		$groups['Sidebar & reassurance'] = array( 'sidebar_title', 'sidebar_text', 'reassurance_title', 'reassurance_text' );
 		$groups['Property preview'] = array( 'preview_heading', 'preview_note' );
 		$groups['Buttons & links'] = array( 'back', 'find', 'confirm', 'continue', 'location', 'edit', 'submit', 'download', 'email', 'details' );

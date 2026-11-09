@@ -200,7 +200,7 @@
 .htr-rr-calculator .htr-calc-roof input:checked + .htr-calc-roof-content:after{content:'\2713';position:absolute;right:8px;top:8px;border-radius:50%;background:#0064c8;color:white;width:24px;height:24px;display:grid;place-items:center}
 .htr-rr-calculator .htr-calc-roof input:focus-visible + .htr-calc-roof-content{outline:3px solid #0064c8;outline-offset:3px}
 
-/* Instant Roof Quote: six focused steps inspired by the 01–06 reference panels. */
+/* Instant Roof Quote: six focused steps inspired by the 01ï¿½06 reference panels. */
 #htr-rr.htr-rr-wizard{max-width:820px;margin:0 auto;padding:18px;border:1px solid #d4e5f1;border-radius:20px;background:linear-gradient(150deg,#fff 65%,#edf7ff);box-shadow:0 5px 24px #143b6214;color:#082348}
 #htr-rr.htr-rr-wizard .htr-rr-hero{display:none}
 #htr-rr.htr-rr-wizard .htr-rr-grid{display:block}
@@ -297,3 +297,21 @@
 .htr-quote-reassurance{padding:12px}
 .htr-quote-sidebar-photo img{height:150px}
 @media(max-width:600px){#htr-rr.htr-rr-wizard{padding:8px}#htr-rr.htr-rr-wizard [data-card]{padding:14px 4px 6px}.htr-quote-sidebar-content{padding:14px}}
+
+/* Three customer steps; map/material sections remain progressively revealed within property details. */
+#htr-rr[data-journey="three"] .htr-quote-steps{grid-template-columns:repeat(3,minmax(0,1fr))}
+#htr-rr[data-journey="three"] .htr-quote-steps li{font-size:13px}
+#htr-rr[data-journey="three"] .htr-rr-grid{display:block}
+#htr-rr[data-journey="three"] [data-card]+[data-card]:not([hidden]){border-top:1px solid #dce6f1;margin-top:20px;padding-top:24px}
+#htr-rr[data-journey="three"] [data-card="1"] .htr-quote-illustration{display:none}
+.htr-quote-step-status{font-size:13px;color:#103b5c;margin:16px 8px 0;font-weight:600}
+.htr-quote-summary{padding:14px 16px;border:1px solid #d6e1ee;border-radius:10px;background:#f3f7fb;color:#103b5c;margin-bottom:16px;overflow-wrap:anywhere}
+#htr-rr[data-journey="three"] .htr-rr-materials{grid-template-columns:repeat(3,minmax(0,1fr))}
+#htr-rr[data-journey="three"] button:focus-visible,#htr-rr[data-journey="three"] a:focus-visible{outline:3px solid #0875d1;outline-offset:3px}
+#htr-rr[data-journey="three"] .htr-rr-mat[aria-checked="true"]{outline:3px solid #0875d1;outline-offset:2px}
+@media(max-width:600px){#htr-rr[data-journey="three"] .htr-quote-steps li{font-size:11px}#htr-rr[data-journey="three"] .htr-rr-materials{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Submission feedback belongs to the host page, outside the cross-origin GHL form. */
+.htr-rr-submission-loader[hidden]{display:none}
+.htr-rr-submission-loader{position:sticky;top:12px;z-index:2;margin-bottom:16px;border:1px solid #c9e5ff;box-shadow:0 4px 16px #103b5c12;overflow-wrap:anywhere}
+.htr-rr-submission-loader>span{flex-shrink:0}
+.htr-rr-submission-loader p{margin:0;font-size:14px;line-height:1.6}

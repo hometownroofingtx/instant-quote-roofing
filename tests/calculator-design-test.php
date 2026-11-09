@@ -14,3 +14,10 @@ $GLOBALS['saved']['contact_mode'] = 'ghl_form';
 $GLOBALS['saved']['google_browser_key'] = 'fixture';
 ob_start(); include HTR_RR_DIR . 'templates/form.php'; $instant = ob_get_clean();
 file_put_contents( __DIR__ . '/.instant-preview.html', '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>' . $css . '</style></head><body>' . $instant . '<script>' . $js . '</script></body></html>' );
+
+$GLOBALS['saved']['contact_mode'] = 'plugin';
+ob_start(); include HTR_RR_DIR . 'templates/form.php'; $native = ob_get_clean();
+check(substr_count($native, 'data-quote-step=') === 3, 'Three-step form preserves only three progress labels');
+check(strpos($native, 'name="sms_service" value="1" checked') === false, 'Service SMS consent not preselected');
+check(strpos($native, 'name="sms_marketing" value="1" checked') === false, 'Marketing SMS consent not preselected');
+file_put_contents(__DIR__ . '/.instant-plugin-preview.html', '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>' . $css . '</style></head><body>' . $native . '<script>' . $js . '</script></body></html>');

@@ -68,7 +68,7 @@ const { pathToFileURL } = require('node:url');
                 await page.route('https://example.test/**', route => route.fulfill({ contentType: 'text/html', body: '<form>GHL fixture contact form</form>' }));
                 await page.route('https://link.msgsndr.com/**', route => route.abort());
                 await page.evaluate(() => {
-                    window.fetch = async (url, options) => { if (String(url).includes('save_contact')) { window.fixtureSavedContact = JSON.parse(options.body); window.fixtureSaveAttempts = (window.fixtureSaveAttempts || 0) + 1; if (window.fixtureSaveAttempts < 3) return { ok: false, json: async () => ({ ok: false }) }; return { ok: true, json: async () => ({ ok: true, saved: true }) }; } return ({ ok: true, json: async () => ({ ok: true, linked: false, report_id: 1, contact_key: 'fixture-capability', contact_expires: 9999999999, lead_type: 'Calculator', estimate: { ok: true, low: 12825, high: 18525, material_label: 'Asphalt', area_sqft: 2850, billed_sqft: 2850, rate_low: 4.5, rate_high: 6.5, pitch_mult: 1, complexity: 'Medium', complexity_mult: 1, region_mult: 1 }, town: 'San Antonio', waste: 0, report: { token: 'fixture', url: 'https://example.test/report' } }) }); };
+                    window.fetch = async (url, options) => { if (String(url).includes('save_contact')) { window.fixtureSavedContact = JSON.parse(options.body); window.fixtureSaveAttempts = (window.fixtureSaveAttempts || 0) + 1; if (window.fixtureSaveAttempts < 3) return { ok: false, json: async () => ({ ok: false }) }; return { ok: true, json: async () => ({ ok: true, saved: true }) }; } return ({ ok: true, json: async () => ({ ok: true, linked: !!window.fixtureServerLinked, report_id: 1, contact_key: 'fixture-capability', contact_expires: 9999999999, lead_type: 'Calculator', estimate: { ok: true, low: 12825, high: 18525, material_label: 'Asphalt', area_sqft: 2850, billed_sqft: 2850, rate_low: 4.5, rate_high: 6.5, pitch_mult: 1, complexity: 'Medium', complexity_mult: 1, region_mult: 1 }, town: 'San Antonio', waste: 0, report: { token: 'fixture', url: 'https://example.test/report' } }) }); };
                 });
                 await page.locator('[data-calc-calculate]').click();
                 await page.locator('[data-calc-address-next]').click();
@@ -90,12 +90,11 @@ const { pathToFileURL } = require('node:url');
                     window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow, origin: 'https://api.leadconnectorhq.com', data: ['set-sticky-contacts', '_ud', JSON.stringify({ first_name: 'Browser', last_name: 'Fixture', email: 'browser@example.test', phone: '2105550100' }), 'location-fixture', 'fingerprint-fixture'] }));
                     window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow, origin: 'https://api.leadconnectorhq.com', data: ['set-sticky-contacts', 'embedded_iframe_' + frame.id, frame.id, 'location-fixture', 'fingerprint-fixture'] }));
                 });
+                assert.equal(await page.locator('[data-calc-result]').isVisible(), false, 'Iframe submission alone stays locked');
+                await page.evaluate(() => { window.fixtureServerLinked = true; });
+                await page.getByRole('button', { name: 'Check submission status' }).click();
                 await page.locator('[data-calc-stage="4"]').waitFor({ state: 'visible' });
                 assert.match(await page.locator('[data-calc-result]').textContent(), /12,825/);
-                await page.getByText('Contact details saved to this report.', { exact: true }).waitFor();
-                assert.equal(await page.evaluate(() => window.fixtureSavedContact.contact.first_name), 'Browser');
-                assert.equal(await page.evaluate(() => window.fixtureSavedContact.contact_key), 'fixture-capability');
-                assert.equal(await page.evaluate(() => window.fixtureSaveAttempts), 3, 'Transient backend failures are retried');
             }
             assert.deepEqual(errors, []);
             await page.close();

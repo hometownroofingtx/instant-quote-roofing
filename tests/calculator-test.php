@@ -145,7 +145,9 @@ $GLOBALS['report']['lead_status'] = 'awaiting_form';
 $international = $direct; $international['contact']['phone'] = '+63 917 555 0123';
 $savedInternational = HTR_RR_REST::save_contact( new WP_REST_Request( $international ) );
 check( $savedInternational->data['phone_saved'] && $GLOBALS['report']['phone'] === '+639175550123', 'International GHL phone is preserved with country code' );
-check( $GLOBALS['report']['lead_status'] === 'ghl_submitted' && count( $GLOBALS['sent'] ) === $sentBefore, 'Direct save does not send a duplicate lead or depend on n8n' );
+check( $GLOBALS['report']['lead_status'] === 'ghl_submitted' && count( $GLOBALS['sent'] ) === $sentBefore, 'Existing browser-save action records submission without duplicate outbound lead' );
+check( HTR_RR_REST::status( new WP_REST_Request( array( 'token' => $direct['token'] ) ) )->data['linked'], 'Saved browser submission retains original report access' );
+HTR_RR_REST::link_contact( new WP_REST_Request( array_merge( $contact, array( 'report_id' => $GLOBALS['report']['id'] ) ) ) );
 $direct['contact']['first_name'] = 'Overwrite attempt';
 check( HTR_RR_REST::save_contact( new WP_REST_Request( $direct ) )->data['already_saved'] && $GLOBALS['report']['first_name'] === 'Test', 'Duplicate browser saves cannot overwrite linked contacts' );
 check( $GLOBALS['report']['request_source'] === 'instant_roof', 'Contact save preserves report source' );
@@ -174,6 +176,7 @@ check( HTR_RR_REST::save_contact( new WP_REST_Request( $save ) )->status === 500
 $GLOBALS['fail_contact_save'] = false;
 check( HTR_RR_REST::save_contact( new WP_REST_Request( $save ) )->data['saved'] && $GLOBALS['wpdb']->insert_id === $before + 1, 'Successful submission creates exactly one contact-complete report' );
 check( $GLOBALS['report']['first_name'] === 'Test' && $GLOBALS['report']['material'] === 'metal', 'Final report contains contact and latest roof selection' );
+HTR_RR_REST::link_contact( new WP_REST_Request( array_merge( $contact, array( 'report_id' => $GLOBALS['report']['id'] ) ) ) );
 check( HTR_RR_REST::save_contact( new WP_REST_Request( $save ) )->data['already_saved'] && $GLOBALS['wpdb']->insert_id === $before + 1, 'Repeated submission with draft key does not create duplicate reports' );
 $GLOBALS['transients'] = array();
 $before = $GLOBALS['wpdb']->insert_id;
@@ -193,5 +196,13 @@ check( $GLOBALS['wpdb']->insert_id === $before && ! $draft->data['estimate']['ok
 $GLOBALS['solar_fixture'] = array_merge( HTR_RR_REST::calculator_measurements( $valid ), array( 'source' => 'solar', 'imagery_quality' => 'HIGH', 'marker_inside' => true, 'marker_off_m' => 0 ) );
 $GLOBALS['transients'] = array();
 $draft = HTR_RR_REST::calculator_draft_prepare( new WP_REST_Request( array_merge( $aerial, $contact ) ) );
-check( $draft->data['estimate']['ok'] && $GLOBALS['wpdb']->insert_id === $before, 'Available aerial measurements price a temporary calculator draft' );
+check( ! $draft->data['estimate']['ok'] && $draft->data['estimate']['locked'] && $GLOBALS['wpdb']->insert_id === $before, 'Available aerial pricing remains server-side before verification' );
+check( ! isset( $draft->data['report']['priceLow'] ) && ! isset( $draft->data['report']['url'] ), 'Draft response contains no price or report URL' );
+check( HTR_RR_REST::create( new WP_REST_Request( array_merge( $valid, $contact ) ) )->status === 403, 'Native report route cannot bypass configured GHL gate' );
 echo "Calculator checks passed. Total checks: $checks\n";
+
+$GLOBALS['report']['lead_status'] = 'awaiting_form';
+check( HTR_RR_REST::email_copy( new WP_REST_Request( array( 'token' => $GLOBALS['report']['token'] ) ) )->status === 404, 'Unverified report cannot be emailed' );
+$GLOBALS['report']['lead_status'] = 'ghl_submitted';
+check( HTR_RR_REST::status( new WP_REST_Request( array( 'token' => $GLOBALS['report']['token'] ) ) )->data['linked'], 'Historical browser submissions retain report access' );
+echo "Security gate checks complete. Total checks: $checks\n";
