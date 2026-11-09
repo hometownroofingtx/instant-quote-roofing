@@ -58,6 +58,13 @@ class HTR_RR_REST {
 		return hash( 'sha256', $ip . wp_salt( 'nonce' ) );
 	}
 
+    /** Never release prices or report links for an unverified GHL draft. */
+    private static function browser_report( array $r ) {
+        if ( in_array( $r['lead_status'] ?? '', array( 'awaiting_form' ), true ) ) {
+            return array( 'token' => $r['token'], 'address' => $r['address'], 'roofType' => $r['material'], 'locked' => true );
+        }
+        return HTR_RR_Report_Page::public_view( $r );
+    }
 	private static function fail( $code, $message, $status = 400 ) {
 		return new WP_REST_Response( array( 'ok' => false, 'code' => $code, 'message' => $message ), $status );
 	}
@@ -154,7 +161,7 @@ class HTR_RR_REST {
 		if ( '' === trim( $clean['first_name'] . $clean['last_name'] ) || ( ! is_email( $clean['email'] ) && ! $clean['phone'] ) || strlen( $clean['first_name'] ) > 80 || strlen( $clean['last_name'] ) > 80 || strlen( $clean['email'] ) > 160 ) { return self::fail( 'invalid', 'GHL did not provide a valid name and email or phone.' ); }
 		if ( ! is_email( $clean['email'] ) ) { $clean['email'] = ''; }
 		// This records browser-reported submission, not independently verified GHL delivery.
-		$clean['lead_status'] = 'ghl_submitted';
+		$clean['lead_status'] = 'ghl_submitted'; // Existing browser-reported GHL completion; webhook remains independently authenticated.
 		$clean['lead_error'] = '';
 		if ( ! empty( $r['_draft'] ) ) {
 			$id = self::persist_draft( $r, $clean );
@@ -193,7 +200,7 @@ class HTR_RR_REST {
 		if ( ! empty( $r['_draft'] ) ) { $r = array_merge( $r, $update ); $result = set_transient( 'htr_rr_draft_' . $r['token'], $r, 2 * DAY_IN_SECONDS ); }
 		else { $result = HTR_RR_DB::update_waiting_report( $r['id'], $update ); $r = HTR_RR_DB::get_report( $r['id'] ); }
 		if ( false === $result || ! $r || 'awaiting_form' !== $r['lead_status'] ) { return self::fail( 'save_failed', 'The roof selection could not be updated. Refresh if you already submitted.', 409 ); }
-		return new WP_REST_Response( array( 'ok' => true, 'report' => HTR_RR_Report_Page::public_view( $r ), 'report_id' => ! empty( $r['_draft'] ) ? 'draft-' . $r['token'] : (int) $r['id'], 'contact_key' => $p['contact_key'], 'contact_expires' => $expires, 'lead_type' => 'Instant quote', 'roof_type' => $s['materials'][ $material ]['label'] ), 200 );
+		return new WP_REST_Response( array( 'ok' => true, 'report' => self::browser_report( $r ), 'report_id' => ! empty( $r['_draft'] ) ? 'draft-' . $r['token'] : (int) $r['id'], 'contact_key' => $p['contact_key'], 'contact_expires' => $expires, 'lead_type' => 'Instant quote', 'roof_type' => $s['materials'][ $material ]['label'] ), 200 );
 	}
 
 	public static function status( WP_REST_Request $req ) {
@@ -205,7 +212,7 @@ class HTR_RR_REST {
 		}
 		$linked = 'awaiting_form' !== $r['lead_status'];
 		$response = array( 'ok' => true, 'linked' => $linked );
-		if ( $linked ) { $response['report'] = HTR_RR_Report_Page::public_view( $r ); }
+		if ( $linked ) { $response['report'] = self::browser_report( $r ); $response['estimate'] = json_decode( $r['estimate'] ?? '', true ); $response['town'] = $r['town'] ?? ''; $response['waste'] = (float) HTR_RR_Settings::get( 'waste_pct' ); }
 		return new WP_REST_Response( $response, 200 );
 	}
 
@@ -249,7 +256,8 @@ class HTR_RR_REST {
 				'last_name'   => $last,
 				'email'       => is_email( $email ) ? $email : '',
 				'phone'       => $phone,
-				'sms_consent' => implode( ',', array_filter( array( ! empty( $p['sms_service'] ) ? 'service' : '', ! empty( $p['sms_marketing'] ) ? 'marketing' : '' ) ) ),
+				'interests' => is_array( $p['interests'] ?? null ) ? implode( ',', array_map( 'sanitize_text_field', $p['interests'] ) ) : sanitize_text_field( (string) ( $p['interests'] ?? '' ) ),
+                'sms_consent' => implode( ',', array_filter( array( filter_var( $p['sms_service'] ?? false, FILTER_VALIDATE_BOOLEAN ) ? 'service' : '', filter_var( $p['sms_marketing'] ?? false, FILTER_VALIDATE_BOOLEAN ) ? 'marketing' : '' ) ) ),
 				'lead_status' => 'pending',
 				'lead_tries'  => 0,
 				'lead_error'  => '',
@@ -264,6 +272,7 @@ class HTR_RR_REST {
 	}
 
 	public static function create( WP_REST_Request $req, $calculator = false, $deferred = false, $draft = false ) {
+        if ( ! $deferred && 'ghl_form' === HTR_RR_Settings::public_config()['contactMode'] ) { return self::fail( 'ghl_required', 'Please submit the contact form to receive your report.', 403 ); }
 		if ( $deferred && 'ghl_form' !== HTR_RR_Settings::public_config()['contactMode'] ) {
 			return self::fail( 'disabled', 'The GHL contact step is not enabled.', 403 );
 		}
@@ -354,7 +363,7 @@ class HTR_RR_REST {
 				'email'      => $email,
 				'phone'      => $phone,
 				'interests'  => implode( ',', $ints ),
-				'sms_consent' => implode( ',', array_filter( array( ! empty( $p['sms_service'] ) ? 'service' : '', ! empty( $p['sms_marketing'] ) ? 'marketing' : '' ) ) ),
+				'sms_consent' => implode( ',', array_filter( array( filter_var( $p['sms_service'] ?? false, FILTER_VALIDATE_BOOLEAN ) ? 'service' : '', filter_var( $p['sms_marketing'] ?? false, FILTER_VALIDATE_BOOLEAN ) ? 'marketing' : '' ) ) ),
 				'address'    => $addr,
 				'city'       => $city,
 				'zip'        => substr( $zip, 0, 5 ),
@@ -436,9 +445,9 @@ class HTR_RR_REST {
 		}
 
 		$r = $draft ? $record : HTR_RR_DB::get_report( $id );
-		$response = array( 'ok' => true, 'report' => HTR_RR_Report_Page::public_view( $r ) );
+		$response = array( 'ok' => true, 'report' => self::browser_report( $r ) );
 		if ( $calculator ) {
-			$response['estimate'] = $e;
+			$response['estimate'] = $deferred ? array( 'ok' => false, 'locked' => true ) : $e;
 			$response['town'] = $near ? $near['town'] : '';
 			$response['waste'] = (float) $s['waste_pct'];
 		}
@@ -497,7 +506,7 @@ class HTR_RR_REST {
 	public static function email_copy( WP_REST_Request $req ) {
 		$p = $req->get_json_params();
 		$r = HTR_RR_DB::get_by_token( isset( $p['token'] ) ? $p['token'] : '' );
-		if ( ! $r ) {
+		if ( ! $r || 'awaiting_form' === $r['lead_status'] ) {
 			return self::fail( 'not_found', 'Report not found.', 404 );
 		}
 		$k = 'htr_rr_mail_' . $r['id'];

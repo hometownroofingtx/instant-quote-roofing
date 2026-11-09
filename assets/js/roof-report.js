@@ -36,20 +36,35 @@
   }
   function show(id, msg) { var el = redirect || calculator ? $('[data-address-error]') : $(id); el.textContent = msg || ''; el.hidden = !msg; }
   function focusCard(n) {
+    var journey = root.dataset.journey === 'three';
+    var major = n <= 3 ? 1 : n === 4 ? 2 : 3;
+    if (journey && n === 3) state.propertyConfirmed = true;
+    if (journey && n === 4 && (!state.propertyConfirmed || !state.material || state.lat == null)) return;
     if (root.classList.contains('htr-rr-wizard')) {
       root.dataset.step = String(n);
-      $$('[data-card]').forEach(function (card) { card.hidden = Number(card.dataset.card) !== n; });
-      $$('[data-quote-step]').forEach(function (item) {
-        var step = Number(item.dataset.quoteStep);
-        item.classList.toggle('is-complete', step < n);
-        if (step === n) item.setAttribute('aria-current', 'step'); else item.removeAttribute('aria-current');
+      $$('[data-card]').forEach(function (card) {
+        var cardNumber = Number(card.dataset.card);
+        card.hidden = journey && major === 1
+          ? !(cardNumber === 1 || (cardNumber === 2 && state.lat != null) || (cardNumber === 3 && state.propertyConfirmed))
+          : cardNumber !== n;
       });
+      $$('[data-quote-step]').forEach(function (item) {
+        var step = Number(item.dataset.quoteStep), current = journey ? major : n;
+        item.classList.toggle('is-complete', step < current);
+        if (step === current) item.setAttribute('aria-current', 'step'); else item.removeAttribute('aria-current');
+      });
+      var status = $('[data-journey-status]');
+      if (status) status.textContent = 'Step ' + major + ' of 3';
+      var summary = $('[data-property-summary]');
+      if (summary) {
+        var material = $$('.htr-rr-mat').find(function (button) { return button.dataset.mat === state.material; });
+        summary.textContent = state.address + (material ? ' · ' + material.textContent.trim() : '');
+      }
     }
     var c = $('[data-card="' + n + '"]');
     if (c) { c.tabIndex = -1; c.focus({ preventScroll: true }); }
     if (c && c.scrollIntoView) c.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   }
-
   /* ---------- Google loader (official dynamic bootstrap) ---------- */
   function loadGoogle(key) {
     if (window.google && window.google.maps && window.google.maps.importLibrary) return;
@@ -69,6 +84,13 @@
       ac.setAttribute('placeholder', redirect ? 'Enter your full address' : 'Enter your property address');
       ac.setAttribute('aria-label', 'Property address');
       (redirect || calculator ? $('[data-address-search]') : $('#htr-rr-search')).appendChild(ac);
+      if (!redirect && !calculator) ac.addEventListener('input', function () {
+        if (state.mapLocked) return;
+        state.lat = state.lng = null; state.propertyConfirmed = false;
+        clearTimeout(pvTimer); pvSeq++;
+        [2, 3].forEach(function (number) { var card = $('[data-card="' + number + '"]'); if (card) card.hidden = true; });
+        var next = $('[data-quote-contact]'); if (next) next.disabled = true;
+      });
       if (redirect) ac.addEventListener('input', function () { selectedPlaceId = null; });
       if (calculator) ac.addEventListener('input', function () {
         if (state.mapLocked) return;
@@ -153,8 +175,10 @@
     var th = $('#htr-rr-thumb');
     th.src = 'https://maps.googleapis.com/maps/api/staticmap?center=' + lat + ',' + lng + '&zoom=19&size=144x112&scale=2&maptype=satellite&key=' + encodeURIComponent(C.browserKey);
     th.alt = 'Satellite photo of ' + state.address; th.hidden = false;
+    state.propertyConfirmed = false;
     unlock(2);
-    showMap();
+    if (root.dataset.journey === 'three') focusCard(2);
+    showMap().catch(function () { show('#htr-rr-err1', 'The map could not load. You can still confirm your selected address.'); });
     preview();
     if (!root.classList.contains('htr-rr-wizard')) focusCard(2);
   }
@@ -166,7 +190,8 @@
     var button = $(calculator ? '[data-calc-address-next]' : '#htr-rr-confirm');
     if (button) { button.disabled = busy; button.setAttribute('aria-busy', String(busy)); }
   }
-  function previewSoon() { clearTimeout(pvTimer); pvSeq++; previewBusy(true); pvTimer = setTimeout(preview, 700); }
+  function previewSoon() {
+    if (!calculator) { state.propertyConfirmed = false; if (root.dataset.journey === 'three') focusCard(2); } clearTimeout(pvTimer); pvSeq++; previewBusy(true); pvTimer = setTimeout(preview, 700); }
   async function preview() {
     if (state.lat == null || state.lng == null) return;
     var seq = ++pvSeq, facts = $('#htr-rr-facts'), note = $('#htr-rr-propnote');
@@ -191,7 +216,7 @@
 
   /* ---------- GHL form at the contact step (1.1.0) ----------
    * The report is saved and priced first (prepare), then the GHL form is shown with the report number and roof type
-   * pre-filled. A verified iframe submission or server-confirmed contact link reveals the prepared estimate.
+   * pre-filled. Only a server-confirmed contact link reveals the prepared estimate.
    * Browser completion never changes lead status; n8n remains responsible for linking contact details. */
   var ghlMode = C.contactMode === 'ghl_form' && !!C.ghlFormId;
   function embedGhlForm(box, prep, onDone) {
@@ -213,58 +238,87 @@
       ' data-form-id="' + esc(fid) + '" title="Your contact information"></iframe>' +
       '<p class="htr-rr-note" data-ghl-note>Your report appears here as soon as you submit the form.</p>';
     box.hidden = false;
+    var retryVerification = document.createElement('button'); retryVerification.type = 'button'; retryVerification.className = 'htr-rr-btn htr-rr-btn--ghost'; retryVerification.textContent = 'Check submission status'; retryVerification.addEventListener('click', function () { if (!finished) { polls = 0; checkLinked(); } }); box.appendChild(retryVerification);
     if (!document.querySelector('script[data-htr-ghl-embed]')) {
       var s = document.createElement('script'); s.src = 'https://link.msgsndr.com/js/form_embed.js'; s.async = true; s.setAttribute('data-htr-ghl-embed', '1'); document.body.appendChild(s);
     }
     var finished = false, polls = 0, timer = null, contactPayload = null, submissionMarker = null;
-    function saveContact() {
-      var target = calculator ? $('[data-calc-result]') : $('#htr-rr-result');
-      if (!target) return;
-      var notice = document.createElement('div'); notice.className = 'htr-rr-alert'; notice.setAttribute('role', 'status');
-      var text = document.createElement('p'); notice.appendChild(text); target.appendChild(notice);
-      if (!contactPayload || !submissionMarker || contactPayload.location !== submissionMarker.location || contactPayload.fingerprint !== submissionMarker.fingerprint || !prep.contact_key) {
-        text.textContent = 'Your form was submitted in GHL, but contact details were not received by this report. Please contact our team with report #' + prep.report_id + '.';
-        if (!calculator) focusCard(6);
-        return;
+    var submissionLoader = document.createElement('div');
+    submissionLoader.className = 'htr-quote-working htr-rr-submission-loader';
+    submissionLoader.hidden = true;
+    submissionLoader.setAttribute('role', 'status');
+    submissionLoader.setAttribute('aria-live', 'polite');
+    submissionLoader.setAttribute('aria-atomic', 'true');
+    var submissionSpinner = document.createElement('span');
+    submissionSpinner.setAttribute('aria-hidden', 'true');
+    var submissionText = document.createElement('p');
+    submissionLoader.appendChild(submissionSpinner); submissionLoader.appendChild(submissionText);
+    box.insertBefore(submissionLoader, box.firstChild);
+    var slowSubmissionTimer = null;
+    function submissionBusy(message) {
+      if (finished) return;
+      var starting = submissionLoader.hidden;
+      submissionLoader.hidden = false;
+      submissionText.textContent = message;
+      if (starting) {
+        slowSubmissionTimer = window.setTimeout(function () {
+          if (!finished && !submissionLoader.hidden) submissionText.textContent = 'This is taking longer than usual. We are still checking your submission. Please keep this page open and avoid submitting the form again.';
+        }, 15000);
+        submissionLoader.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'nearest' });
       }
+    }
+    function stopSubmissionLoader() {
+      window.clearTimeout(slowSubmissionTimer); slowSubmissionTimer = null;
+      submissionLoader.hidden = true;
+    }
+    var savingContact = false, savedContact = false, saveAttempts = 0, retrySave;
+    async function saveSubmittedContact() {
+      if (finished || savingContact || savedContact) return;
+      if (!contactPayload || !submissionMarker || !prep.contact_key ||
+          contactPayload.location !== submissionMarker.location || contactPayload.fingerprint !== submissionMarker.fingerprint) return;
       var source = contactPayload.contact;
       var contact = { first_name: source.first_name || source.firstName || '', last_name: source.last_name || source.lastName || '', email: source.email || '', phone: source.phone || source.phone_number || source.phoneNumber || '' };
       if (!contact.first_name && !contact.last_name && (source.full_name || source.name)) {
         var names = String(source.full_name || source.name).trim().split(/\s+/); contact.first_name = names.shift(); contact.last_name = names.join(' ');
       }
-      var retry = document.createElement('button'); retry.type = 'button'; retry.className = 'htr-rr-btn htr-rr-btn--ghost'; retry.textContent = 'Retry saving contact details'; retry.hidden = true; notice.appendChild(retry);
-      var attempts = 0, saving = false;
-      async function save() {
-        if (saving) return; saving = true; retry.hidden = true; text.textContent = 'Saving your contact details to this report…';
-        try {
-          var response = await api('save_contact', { token: prep.report.token, contact_key: prep.contact_key, expires: prep.contact_expires, contact: contact });
-          if (!response.ok || !response.json || !response.json.saved) throw new Error('not saved');
-          text.textContent = 'Contact details saved to this report.';
-          if (response.json.phone_saved === false) text.textContent = 'Your contact details were saved, but GHL did not provide a usable phone number. Please contact our team to add your number.';
-          notice.className = 'htr-rr-note';
-          if (!calculator && root.classList.contains('htr-rr-wizard')) focusCard(6);
-        } catch (e) {
-          if (++attempts < 3) { text.textContent = 'Retrying contact save…'; window.setTimeout(save, attempts * 1500); }
-          else { text.textContent = 'Your form was submitted in GHL, but contact details could not be saved to this report. Please retry before closing this page.'; retry.hidden = false; if (!calculator) focusCard(6); }
-        } finally { saving = false; }
-      }
-      retry.addEventListener('click', function () { attempts = 0; save(); });
-      save();
+      savingContact = true;
+      submissionBusy('Saving your contact details and preparing your roof report. Please keep this page open.');
+      var note = box.querySelector('[data-ghl-note]');
+      if (note) note.textContent = 'Saving your contact details and opening your roof report...';
+      try {
+        var response = await api('save_contact', { token: prep.report.token, contact_key: prep.contact_key, expires: prep.contact_expires, contact: contact });
+        if (finished) return;
+        if (!response.ok || !response.json || !response.json.saved) throw new Error('save failed');
+        savedContact = true;
+        await checkLinked();
+      } catch (error) {
+        if (finished) return;
+        if (++saveAttempts < 3) { submissionBusy('The save did not complete. Retrying your report automatically...'); window.setTimeout(saveSubmittedContact, saveAttempts * 1500); }
+        else {
+          stopSubmissionLoader();
+          if (note) note.textContent = 'GHL received the submission, but this report could not be saved. Please retry saving before closing this page.';
+          if (!retrySave) {
+            retrySave = document.createElement('button'); retrySave.type = 'button'; retrySave.className = 'htr-rr-btn htr-rr-btn--ghost'; retrySave.textContent = 'Retry saving contact details';
+            retrySave.addEventListener('click', function () { saveAttempts = 0; retrySave.hidden = true; saveSubmittedContact(); }); box.appendChild(retrySave);
+          }
+          retrySave.hidden = false;
+        }
+      } finally { savingContact = false; }
     }
     function finish(why) {
-      if (finished) return; finished = true; prep._done = true;
+      if (finished) return; stopSubmissionLoader(); finished = true; prep._done = true;
       clearInterval(timer); window.removeEventListener('message', onMsg);
       if (window.console) console.log('HTR-RR: GHL form done (' + why + ')');
-      try { onDone(prep); } finally { if (prep.contactSubmitted) saveContact(); }
+      onDone(prep);
     }
     var checking = false;
     async function checkLinked() {
       if (finished || checking) return;
       checking = true;
       try {
-        var j = (await api('status', { token: prep.report.token })).json || {};
-        if (j.ok && j.linked) {
-          if (j.report) prep.report = j.report;
+        var response = await api('status', { token: prep.report.token }), j = response.json || {};
+        if (response.ok && j.ok && j.linked && j.report && j.report.url && !j.report.locked) {
+          if (j.report) prep.report = j.report; if (j.estimate) prep.estimate = j.estimate; if (j.town) prep.town = j.town; if (j.waste != null) prep.waste = j.waste;
           finish('linked');
         }
       } catch (e) { /* transient failures are retried by the poll */ }
@@ -286,6 +340,7 @@
         try {
           var received = JSON.parse(data[2]);
           if (received && typeof received === 'object' && !Array.isArray(received)) contactPayload = { contact: received, location: data[3], fingerprint: data[4] };
+          saveSubmittedContact();
         } catch (e) {}
         return;
       }
@@ -296,7 +351,9 @@
           typeof data[3] === 'string' && data[3].trim() && typeof data[4] === 'string' && data[4].trim()) {
         prep.contactSubmitted = true;
         submissionMarker = { location: data[3], fingerprint: data[4] };
-        finish('verified GHL iframe submission');
+        submissionBusy('Submission received. Saving your information and preparing your roof report...');
+        saveSubmittedContact();
+        checkLinked();
         return;
       }
       var event = typeof data === 'string' ? data : Array.isArray(data) ? data[0] : data && (data.type || data.event || data.action || data.message);
@@ -304,15 +361,16 @@
       if (typeof event !== 'string') return;
       if (/^(?:(?:msgsndr|ghl)[-_: ])?(?:form[-_ ]?submit(?:ted)?|form[-_ ]?submission|submission[-_ ]?(?:success|complete)|thank[-_ ]?you)$/i.test(event)) {
         prep.contactSubmitted = true;
-        finish('verified form submission');
+        submissionBusy('Checking your submission and preparing your roof report. Please keep this page open.');
+        checkLinked();
       }
     }
     window.addEventListener('message', onMsg);
-    box._ghlCleanup = function () { finished = true; clearInterval(timer); window.removeEventListener('message', onMsg); };
-    // Server linking remains a fallback if a form does not emit a supported completion message.
+    box._ghlCleanup = function () { stopSubmissionLoader(); finished = true; clearInterval(timer); window.removeEventListener('message', onMsg); };
+    // Authenticated server linking is the authority; iframe messages only prompt another check.
     timer = setInterval(function () {
       if (++polls > 450) {
-        clearInterval(timer); window.removeEventListener('message', onMsg);
+        stopSubmissionLoader(); clearInterval(timer); window.removeEventListener('message', onMsg);
         var note = box.querySelector('[data-ghl-note]');
         if (note) note.textContent = 'Still waiting for your form to link. Please contact our team with report #' + prep.report_id + ' if you already submitted.';
         return;
@@ -448,7 +506,7 @@
   }
 
   $('#htr-rr-edit').addEventListener('click', function () {
-    focusCard(1); var ac = document.getElementById('htr-rr-ac'); if (ac && ac.focus) ac.focus();
+    state.propertyConfirmed = false; focusCard(1); var ac = document.getElementById('htr-rr-ac'); if (ac && ac.focus) ac.focus();
   });
   if (root.classList.contains('htr-rr-wizard')) {
     focusCard(1);
@@ -458,7 +516,7 @@
     });
     $$('[data-quote-back]').forEach(function (button) { button.addEventListener('click', function () { if (!state.mapLocked) focusCard(Number(button.dataset.quoteBack)); }); });
     $('[data-quote-contact]').addEventListener('click', function () {
-      if (!state.material) return;
+      if (!state.material || (root.dataset.journey === 'three' && !state.propertyConfirmed)) return;
       unlock(4); focusCard(4); if (ghlMode) ghlPrepare();
     });
   }
@@ -516,6 +574,15 @@
     });
   });
 
+  var materialsGroup = $('#htr-rr-materials');
+  if (materialsGroup) materialsGroup.addEventListener('keydown', function (event) {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    var buttons = $$('.htr-rr-mat').filter(function (button) { return !button.disabled; });
+    var current = buttons.indexOf(event.target); if (current < 0 || !buttons.length) return;
+    event.preventDefault();
+    var index = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (current + (['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 1) + buttons.length) % buttons.length;
+    buttons[index].focus(); buttons[index].click();
+  });
   /* Keep one pending report while the customer compares roof types at the same location. */
   var ghlKey = '', ghlRenderedKey = '', ghlDraft = null, ghlPending = false;
   async function ghlPrepare() {
@@ -544,8 +611,7 @@
         $$('.htr-rr-mat').forEach(function (button) { button.disabled = true; });
         var search = $('#htr-rr-search'); if (search) search.setAttribute('inert', '');
         unlock(6); progress(6); renderResult(prep.report);
-        if (prep.contactSubmitted && root.classList.contains('htr-rr-wizard')) { unlock(5); focusCard(5); }
-        else focusCard(6);
+        focusCard(6);
       });
     } catch (e) {
       ghlRenderedKey = ''; box.innerHTML = ''; show('#htr-rr-err4', e.message);
@@ -559,7 +625,7 @@
     ev.preventDefault();
     var f = ev.target, btn = $('#htr-rr-submit');
     show('#htr-rr-err4', '');
-    if (!state.lat || !state.material) { show('#htr-rr-err4', 'Please finish steps 1 to 3 first.'); return; }
+    if (state.lat == null || !state.material) { show('#htr-rr-err4', 'Please finish steps 1 to 3 first.'); return; }
     var data = {
       first_name: f.first_name.value.trim(), last_name: f.last_name.value.trim(), email: f.email.value.trim(), phone: f.phone.value.trim(),
       website: f.website.value, sms_service: f.sms_service.checked, sms_marketing: f.sms_marketing.checked, interests: $$('input[name="interests"]:checked', f).map(function (x) { return x.value; }),
@@ -571,7 +637,7 @@
     }
     btn.disabled = true; btn.textContent = 'Working...';
     unlock(5); focusCard(5); progress(3);
-    var timer = setTimeout(function () { progress(4); }, 1500);
+    var timer = null; // Indeterminate loading; never invent percentage or completion timing.
     try {
       var out = await api('report', data), j = out.json || {};
       clearTimeout(timer);

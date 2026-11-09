@@ -83,11 +83,12 @@ class HTR_RR_Report_Page {
 			return;
 		}
 		$r = HTR_RR_DB::get_by_token( sanitize_text_field( wp_unslash( $_GET['htr_roof_report'] ) ) ); // phpcs:ignore
-		if ( ! $r ) {
+		if ( ! $r || in_array( $r['lead_status'] ?? '', array( 'awaiting_form' ), true ) ) {
 			status_header( 404 );
 			wp_die( 'This roof report link is not valid.', 'Report not found', array( 'response' => 404 ) );
 		}
 		nocache_headers();
+        header( 'Referrer-Policy: same-origin' );
 		header( 'X-Robots-Tag: noindex, nofollow' );
 		$v = self::public_view( $r );
 		include HTR_RR_DIR . 'templates/report.php';

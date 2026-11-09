@@ -271,7 +271,7 @@ The frontend GHL flow uses `draft_prepare` / `calculator_draft_prepare` to prepa
 
 The form's hidden `htr_report_id` carries a `draft-<token>` reference until submission. The authenticated `link_contact` endpoint accepts this reference too, if an optional workflow is still in use; pass the value unchanged rather than coercing it to an integer. Legacy `prepare` endpoints remain available for older integrations, while the current frontend uses the draft endpoints. Public report links become available after finalization, and the page reports any failure to save the submitted contact.
 ### Instant Roof Quote design
-Roof Reports > Settings > Instant Roof Quote Design controls the six progress labels, step headings and descriptions, navigation and report action labels, analysis checklist, property illustration, sidebar photo and sidebar copy. Roof material photos remain in Pricing; GHL fields and its internal form appearance remain managed in GHL. The sidebar stacks beneath the quote on smaller screens. Design settings use the existing option, validate image attachments, and preserve absent values during partial updates.
+Roof Reports > Settings > Instant Roof Quote Design controls the three customer-facing progress labels, property/contact headings, retained section headings and descriptions, navigation and report action labels, analysis checklist, property illustration, sidebar photo and sidebar copy. Roof material photos remain in Pricing; GHL fields and its internal form appearance remain managed in GHL. The sidebar stacks beneath the quote on smaller screens. Design settings use the existing option, validate image attachments, and preserve absent values during partial updates.
 
 ## Standalone form embed (same origin)
 
@@ -286,3 +286,86 @@ Open `/?htr_rr_embed_demo=1` for a working iframe example, form-only link and co
 ```
 
 These pages are noindex and send `X-Frame-Options: SAMEORIGIN` plus `frame-ancestors 'self'`. External domains remain blocked; third-party allowlisting and source tracking are not implemented. Deploying the code does not change Google/GHL settings or enable external embedding. Validate the complete submission on the deployed site separately.
+
+## Three-step quote interface (1.3.0)
+
+The quote now groups property search, satellite confirmation and materials into one customer step. See [implementation, GHL verification requirements, tests and deployment notes](docs/three-step-quote-redesign.md). Version 1.3.2 restores the existing correlated GHL iframe contact-save path and persists before displaying Step 3 on the same page. Opening the full report or print dialog is a separate customer action. The authenticated link_contact callback remains supported. See the security distinction and staging checks in the implementation notes.
+
+## Editable report layout (1.4.0)
+
+Roof Reports > Report Layout supports section ordering, additional text and private unsaved previews. See [report layout editor guide](docs/report-layout-editor.md) for deployment files, global behavior and validation limits.
+
+## Current release: 1.6.9
+
+### Customer journey and submission behavior
+
+The Instant Roof Quote has exactly three visible steps:
+
+1. **Property & Roof Details** — existing address autocomplete, satellite/map confirmation, roof preview and configured material choices appear progressively on one screen.
+2. **Contact Information** — the existing configured contact/GHL form, service interests and separate SMS consent controls.
+3. **Your Roof Report** — saved report results, measurements, estimate, PDF/download, email and full-details actions.
+
+Successful contact saving advances to Step 3 without an automatic external-page redirect. Submission feedback shows saving/retry activity and a longer-than-usual message after 15 seconds. A delay never counts as success. The separate roof calculator retains its own interface and shares the contact-handling helpers.
+
+In GHL mode the existing iframe-specific source/origin/correlation checks and signed `save_contact` capability are retained. Contact saving is retried on transient failure and must persist before the normal browser-reported completion path reveals the report. The authenticated `link_contact` webhook remains supported; preserve `draft-<token>` references as strings in any workflow mapping. Browser-reported completion is not independent server verification of a GHL submission. Do not describe this release as a webhook-only gate. Waiting drafts withhold final prices/report links, and native report endpoints cannot bypass configured GHL mode.
+
+### Report Layout editor
+
+Open **Roof Reports → Report Layout** (`wp-admin/admin.php?page=htr-rr-layout`).
+
+- Drag report sections into order, or use the accessible up/down icons.
+- Add optional text sections; built-in generated sections are retained.
+- Use the 30% editor / 70% preview workspace; it stacks on smaller screens.
+- Preview unsaved changes with clearly labeled sample data, or enter a saved report ID for an administrator-only preview of actual data.
+- Click outlined wording in the preview to edit headings, labels, instructions, disclaimers and custom text. Generated prices, measurements and customer data remain read-only.
+- Use **Header Style** and **Footer Style** popups to set solid/gradient backgrounds, text colors, spacing, alignment and Media Library logos.
+- Footer controls support headings/details and a branded contact bar: logo left, phone center, service area right, with an optional website beneath the logo.
+- **Apply style** updates the unsaved preview; **Save report layout** publishes changes globally to online reports and PDF output, including existing reports.
+
+Layout data is stored in the `htr_rr_report_layout` WordPress option. There are no custom-table schema changes. Saving and previewing require `manage_options` and a nonce. Section names, wording keys, sizes, colors, logo attachments and contact URLs are validated; custom text uses a limited HTML allowlist. No arbitrary PHP/CSS is accepted. Inline preview updates verify the iframe source, origin and preview revision.
+
+### PDF and print behavior
+
+PDF download uses the browser's **Print / Save as PDF**, not a server-side PDF service.
+
+- Header and branded contact footer repeat on printed pages; the footer is anchored at the bottom with reserved layout space.
+- The disclaimer prints once at the end of the report body.
+- Body sections are paginated separately to retain aerial imagery, SVG diagrams and roof-face data. Download waits for images/fonts and draws available diagrams before printing.
+- Normal roof-face tables stay with their heading and source note, moving together to the next page if needed. A table taller than a full page may still split.
+- Print has square branding, zero document-defined outer margins, padded body content, additional breathing room after the header, a full-width aerial image and larger side-by-side diagrams.
+
+Enable **Background graphics** for colored bands. If your browser overrides page margins, select **Margins: None**. Turn off browser **Headers and footers** to remove its date/title/URL decorations. Physical printers may impose hardware margins. Native iOS/Safari/Android printing still needs device verification.
+
+### Deployment and rollback
+
+Deploy this plugin as a complete unit. New runtime files include `includes/class-report-layout.php`, `assets/js/report-layout.js`, `assets/css/report-layout.css`, `assets/js/report-print.js` and all `templates/report-sections/*.php`. Do not upload the report shell without these files or mix versions.
+
+Back up the plugin/options, upload the complete version, purge page/asset caches and test the actual GHL submission, backend saving, Step 3, report preview, email and PDF. Existing Google/GHL/n8n credentials and pricing settings remain in place; no new environment variables are required.
+
+For rollback, restore the previous complete plugin package. The layout option can remain stored; older versions ignore it. No pricing/report-table rollback is needed. Consider the contact-path differences documented in the implementation notes when choosing a rollback version.
+
+### Local validation
+
+Run isolated PHP suites with PHP 7.4+ (tested locally with PHP 8.2):
+
+```text
+php tests/calculator-test.php
+php tests/report-layout-test.php
+php tests/calculator-design-test.php
+```
+
+Generate fixtures with the PHP suites before the relevant Playwright checks:
+
+```text
+node tests/instant-ghl-browser-test.js
+node tests/calculator-design-browser-test.js
+node tests/three-step-native-browser-test.js
+node tests/report-layout-browser-test.js
+node tests/report-print-browser-test.js
+```
+
+Set `HTR_BROWSER_CHANNEL=chrome` to use installed Chrome. Node and Playwright must be available. Generated HTML, screenshots and PDFs are ignored by Git.
+
+The calculator/lead suite has 131 isolated checks (including pricing checks); the layout suite has 40. Browser checks cover submission retries, same-page completion, editor controls, inline wording, message rejection and PDF pagination. PDF tests include real Chrome-generated documents at mobile/desktop viewport widths, complete measured-roof fixtures, repeated branding, a single disclaimer and six-row table grouping. Provider responses, WordPress/KSES and some admin dependencies are doubled in fixtures; these checks do not prove live integrations or native-device printing. Existing PHP suites also cover settings, pagination, CSV output and request sources.
+
+See [three-step implementation notes](docs/three-step-quote-redesign.md) and [report layout editor guide](docs/report-layout-editor.md) for details and remaining QA. Public token TTL, production debug settings and wider infrastructure hardening remain separate tasks; this release is not a full security audit.
