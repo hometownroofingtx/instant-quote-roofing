@@ -10,3 +10,5 @@
 
 .report-customer-details{display:flex;flex-wrap:wrap;gap:3px 16px;margin:8px 0 12px;font-size:11px;line-height:1.35;overflow-wrap:anywhere;break-inside:avoid}.report-customer-details strong,.report-customer-details>span:nth-child(2){flex-basis:100%}
 .report-customer-details strong{flex-basis:auto}.report-customer-details>span:nth-child(2){flex-basis:auto}@media print{.estimate-cover .estimate-content{padding-top:12px;padding-bottom:12px}.estimate-cover .report-customer-details{margin:4px 0 8px;font-size:10px}}
+.estimate-header .estimate-header-phone{display:block;margin-top:6px;color:#fff;font-size:28px;font-weight:700;line-height:1.15;text-decoration:none;white-space:nowrap}@media screen and (max-width:540px){.estimate-header .estimate-header-phone{font-size:26px}}
+@media print{.estimate-details .estimate-content{padding-top:16px;padding-bottom:16px}.estimate-details .estimate-process{margin:12px 0 16px}.estimate-details .estimate-notes{margin-top:12px}.estimate-details .estimate-closing{margin-top:14px}.estimate-details .estimate-footer{padding-top:10px;padding-bottom:14px}}

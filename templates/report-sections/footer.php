@@ -24,7 +24,7 @@
         <?php if ($contact_phone) : ?>
             <a class="report-contact-item report-contact-phone" href="<?php echo esc_url('tel:'.preg_replace('/[^0-9+]/','',$contact_phone)); ?>">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15.5 15.5 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.2c1.1.4 2.3.6 3.6.6a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.6 21 3 13.4 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.3.2 2.5.6 3.6a1 1 0 0 1-.2 1z"/></svg>
-                <span><?php echo esc_html($contact_phone); ?></span>
+                <span><?php echo esc_html(HTR_RR_Estimate_Design::display_phone($contact_phone)); ?></span>
             </a>
         <?php endif; ?>
         <?php if ($footer_style['contact_area']) : ?>

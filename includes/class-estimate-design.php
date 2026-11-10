@@ -3,10 +3,17 @@
 if (!defined('ABSPATH')) { exit; }
 class HTR_RR_Estimate_Design {
     const OPTION='htr_rr_estimate_design';
+    public static function display_phone($phone) {
+        $phone=trim((string)$phone);
+        $digits=preg_replace('/\D/','',$phone);
+        return strlen($digits)===11 && $digits[0]==='1'
+            ? preg_replace('/^\+?1[\s.-]*/','',$phone) : $phone;
+    }
     public static function fields() {
         return array(
             'tagline'=>array('Header tagline','TEXAS IS OUR HOMETOWN.'),
             'tagline_note'=>array('Header supporting line','A legacy you can count on.'),
+            'header_phone'=>array('Header phone number (blank uses report contact number)',''),
             'eyebrow'=>array('Cover label','PERSONALIZED ROOF REPORT'),
             'title'=>array('Cover heading','Your roof. Your estimate.'),
             'range_label'=>array('Estimate label','YOUR ESTIMATED REPLACEMENT RANGE'),

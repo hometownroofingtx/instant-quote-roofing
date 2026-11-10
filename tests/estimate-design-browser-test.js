@@ -29,6 +29,12 @@ function pdfText(pdf){
   assert.equal(count,2,'Standard estimate fits two printed pages');
   const text=pdfText(pdf);for(const phrase of ['Your roof. Your estimate.','$15,000 - $20,000','2,500','Your roof at a glance','Inspect & verify','Test disclaimer'])assert(text.includes(phrase),phrase);
   assert.deepEqual(errors,[]);fs.writeFileSync(path.join(__dirname,`.estimate-design-${width}.pdf`),pdf);
+  await p.locator('.estimate-warranty h2').evaluate(el=>el.textContent='LIFETIME TRANSFERABLE LABOR WARRANTY');
+  await p.locator('.estimate-warranty p').evaluate(el=>el.textContent="Workmanship protection you can carry forward. Coverage and transfer are subject to Hometown's written warranty terms.");
+  await p.locator('.estimate-notes p:last-child').evaluate(el=>el.textContent='This is an estimated price range based on aerial measurements and the roof type you selected. Final pricing may vary after an on-site inspection.');
+  const detailedPdf=await p.pdf({preferCSSPageSize:true,printBackground:true});
+  assert.equal((detailedPdf.toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length,2,'Long warranty and production disclaimer keep footer on details page');
+  fs.writeFileSync(path.join(__dirname,`.estimate-design-warranty-${width}.pdf`),detailedPdf);
   await p.goto(pathToFileURL(path.join(__dirname,'.estimate-design-long-preview.html')).href);
   const longPdf=await p.pdf({preferCSSPageSize:true,printBackground:true});assert(pdfText(longPdf).includes('35'),'Long table retains last face');
   await p.close();

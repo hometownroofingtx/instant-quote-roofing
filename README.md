@@ -273,7 +273,7 @@ The form's hidden `htr_report_id` carries a `draft-<token>` reference until subm
 ### Instant Roof Quote design
 Roof Reports > Settings > Instant Roof Quote Design controls the three customer-facing progress labels, property/contact headings, retained section headings and descriptions, navigation and report action labels, analysis checklist, property illustration, sidebar photo and sidebar copy. Roof material photos remain in Pricing; GHL fields and its internal form appearance remain managed in GHL. The sidebar stacks beneath the quote on smaller screens. Design settings use the existing option, validate image attachments, and preserve absent values during partial updates.
 
-## Standalone form embed (same origin)
+## Standalone form embed
 
 The form-only page is `/?htr_rr_embed=report`. It renders the existing Instant Roof Quote without the theme header/footer or quote sidebar, independently of floating-tab enablement and drawer settings. LeadConnector chatbot scripts are dequeued on embed requests; the GHL contact form and regular website chat are unaffected.
 
@@ -285,7 +285,7 @@ Open `/?htr_rr_embed_demo=1` for a working iframe example, form-only link and co
   style="border:0" allow="geolocation"></iframe>
 ```
 
-These pages are noindex and send `X-Frame-Options: SAMEORIGIN` plus `frame-ancestors 'self'`. External domains remain blocked; third-party allowlisting and source tracking are not implemented. Deploying the code does not change Google/GHL settings or enable external embedding. Validate the complete submission on the deployed site separately.
+Both pages are noindex. The form endpoint allows framing by the WordPress origin and `https://link.hometownroofingtx.com` through CSP `frame-ancestors`; it removes the conflicting PHP X-Frame-Options header. The demo retains `X-Frame-Options: SAMEORIGIN` and `frame-ancestors 'self'`. Other external origins remain blocked. Server/CDN headers may impose additional restrictions. The standalone form hides the Storm Alert banner and chat/sidebar elements. The demo's automatic height messaging remains same-origin; use a fixed-height iframe for the GHL landing page. Google/GHL settings and source tracking are unchanged; verify complete submissions on the deployed site separately.
 
 ## Three-step quote interface (1.3.0)
 
@@ -372,3 +372,12 @@ See [three-step implementation notes](docs/three-step-quote-redesign.md) and [re
 ## Optional two-page estimate design (1.7.0)
 
 Roof Reports > Report Layout > Report template & estimate design now offers the supplied estimate-style presentation. The cover uses actual property imagery, metrics and saved pricing; the details page contains editable supporting information, materials, measurements and next steps. Classic remains available and is the default. See [estimate design setup and validation notes](docs/estimate-report-design.md).
+
+## Report and embed updates — November 11, 2026
+
+- Estimate headers include a large clickable company phone on every composed page. Edit **Roof Reports > Report Layout > Report template & estimate design > Header phone number**, or click the number in the private preview and save. Blank uses the existing report contact number.
+- Visible company phone numbers omit the leading US country code when the saved number contains eleven digits starting with 1. Click-to-call links retain the saved number. Customer contact details are unchanged.
+- Details-page print spacing accommodates the longer warranty heading and production disclaimer without creating a footer-only page in the regression fixture. Roof diagrams remain an optional separate appendix. Arbitrarily long edited copy can still require additional pages.
+- The standalone form supports the explicitly allowed GHL origin and hides the injected Storm Alert. See the embed instructions above.
+
+Deploy the matching plugin files together. Local validation includes 62 isolated report checks, browser/PDF checks at 375px and 1366px (including longer warranty/disclaimer content), and local HTTP framing headers. These do not prove production headers, GHL submissions, or a live customer PDF. Generated fixtures and PDFs remain excluded from Git.

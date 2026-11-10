@@ -1,5 +1,5 @@
 <?php
-/** Standalone quote and same-origin demonstration, independent of floating tabs. */
+/** Standalone quote with an explicit landing-page frame allowlist. */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 class HTR_RR_Embed {
 	public static function init() { add_action( 'template_redirect', array( __CLASS__, 'page' ), 5 ); }
@@ -9,9 +9,14 @@ class HTR_RR_Embed {
 		if ( ! $demo && ! $form ) { return; }
 		nocache_headers();
 		header( 'X-Robots-Tag: noindex, nofollow' );
-		// Local/same-site embedding only until external hosts are configured explicitly.
-		header( 'X-Frame-Options: SAMEORIGIN' );
-		header( "Content-Security-Policy: frame-ancestors 'self'" );
+		if ( $form && ! $demo ) {
+			// X-Frame-Options cannot express a cross-origin allowlist; CSP enforces it.
+			header_remove( 'X-Frame-Options' );
+			header( "Content-Security-Policy: frame-ancestors 'self' https://link.hometownroofingtx.com" );
+		} else {
+			header( 'X-Frame-Options: SAMEORIGIN' );
+			header( "Content-Security-Policy: frame-ancestors 'self'" );
+		}
 		remove_action( 'wp_footer', array( 'HTR_RR_Floating_Tab', 'render' ) );
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'remove_chat_assets' ), PHP_INT_MAX );
 		add_action( 'wp_footer', array( __CLASS__, 'remove_chat_assets' ), 19 );

@@ -17,8 +17,12 @@ $face_groups=array(array_slice($face_rows,0,9));foreach(array_chunk(array_slice(
 $custom_sections=array_values(array_filter($report_layout,function($section){return $section['type']==='text';}));
 $show_diagrams=$design['diagrams']==='1'&&!empty($v['measured'])&&empty($v['customerEntered']);
 $total_pages=1+count($face_groups)+($show_diagrams?1:0)+($custom_sections?1:0);
-$header=function()use($brand_logo,$design,$edit_design){ ?>
-<header class="estimate-header"><img src="<?php echo esc_url($brand_logo); ?>" alt="Hometown Roofing &amp; Restoration"><div><strong><?php echo HTR_RR_Estimate_Design::text($design,'tagline',$edit_design); ?></strong><p><?php echo HTR_RR_Estimate_Design::text($design,'tagline_note',$edit_design); ?></p></div></header>
+$header_phone=trim($design['header_phone']??'')?:$phone;
+$header_tel=$header_phone?'tel:'.preg_replace('/[^0-9+]/','',$header_phone):'';
+$phone=HTR_RR_Estimate_Design::display_phone($phone);
+$header_phone=HTR_RR_Estimate_Design::display_phone($header_phone);
+$header=function()use($brand_logo,$design,$edit_design,$header_phone,$header_tel){ ?>
+<header class="estimate-header"><img src="<?php echo esc_url($brand_logo); ?>" alt="Hometown Roofing &amp; Restoration"><div><strong><?php echo HTR_RR_Estimate_Design::text($design,'tagline',$edit_design); ?></strong><p><?php echo HTR_RR_Estimate_Design::text($design,'tagline_note',$edit_design); ?></p><?php if($header_phone||$edit_design): ?><a class="estimate-header-phone" href="<?php echo esc_url($header_tel); ?>"><?php echo HTR_RR_Estimate_Design::text(array('header_phone'=>$header_phone),'header_phone',$edit_design); ?></a><?php endif; ?></div></header>
 <?php };
 $footer=function($page)use($website,$website_url,$phone,$tel,$design,$edit_design){ ?>
 <footer class="estimate-footer"><div><?php if($website): ?><a href="<?php echo esc_url($website_url); ?>"><?php echo HTR_RR_Estimate_Design::text($design,'website',$edit_design); ?></a><?php endif; ?><?php if($phone): ?> <span aria-hidden="true">|</span> <a href="<?php echo esc_url($tel); ?>"><?php echo esc_html($phone); ?></a><?php endif; ?></div><span><?php echo HTR_RR_Estimate_Design::text($design,'footer_label',$edit_design); ?> / <?php echo esc_html(str_pad((string)$page,2,'0',STR_PAD_LEFT)); ?></span></footer>
