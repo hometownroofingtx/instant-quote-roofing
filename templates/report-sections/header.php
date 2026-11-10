@@ -4,3 +4,5 @@
 		<?php $header_style=HTR_RR_Report_Layout::sanitize_style($report_section['style'] ?? array()); $header_logo=$header_style['logo_id'] ? wp_get_attachment_image_url($header_style['logo_id'], 'medium') : ''; ?>
         <img style="height:<?php echo (int)$header_style['logo_size']; ?>px" src="<?php echo esc_url( $header_logo ?: $logo ); ?>" alt="Hometown Roofing &amp; Restoration">
 	</div>
+
+<?php include __DIR__.'/customer-details.php'; ?>

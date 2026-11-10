@@ -4,6 +4,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 $report_layout = $report_layout ?? HTR_RR_Report_Layout::get();
+$estimate_design = $estimate_design ?? HTR_RR_Estimate_Design::get();
+if ('estimate' === $estimate_design['template']) { include __DIR__ . '/report-estimate.php'; return; }
 $print = isset( $_GET['print'] ) && '1' === $_GET['print']; // phpcs:ignore WordPress.Security.NonceVerification
 $logo  = HTR_RR_URL . 'assets/img/logo.png';
 $m     = array( 'HTR_RR_Report_Page', 'money' );
@@ -92,6 +94,8 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{border-bottom:1px
  .report-fixed-footer .report-contact-bar,.report-print-table>tfoot .report-contact-bar{padding-top:12px;padding-bottom:12px}
  .report-fixed-footer .report-section,.report-print-table>tfoot .report-section{margin:0!important;border-radius:0!important}
 }
+
+.report-customer-details{display:flex;flex-wrap:wrap;gap:3px 16px;margin:8px 0 12px;font-size:11px;line-height:1.35;overflow-wrap:anywhere;break-inside:avoid}.report-customer-details strong,.report-customer-details>span:nth-child(2){flex-basis:100%}
 </style></head><body>
 <div class="bar"><p id="htr-download-help">Choose <strong>Save as PDF</strong> in the print dialog to download your report.</p><button id="htr-download-report" type="button" aria-describedby="htr-download-help">Download report</button></div>
 <?php if (!empty($layout_preview)) : ?><p style="text-align:center;font-weight:700"><?php echo esc_html($layout_preview); ?></p><?php endif; ?>

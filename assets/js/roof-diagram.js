@@ -29,7 +29,7 @@
     var g = geometry(r); if (!g) return '<p class="htr-rr-note">No roof outline available.</p>';
     var W = 380, H = 270, pad = 46, s = fit(g.L, g.S, W, H, pad);
     var w = g.L * s, h = g.S * s, x0 = (W - w) / 2, y0 = (H - h) / 2 - 6, x1 = x0 + w, y1 = y0 + h, ym = (y0 + y1) / 2;
-    var o = '<svg class="htr-rr-plan" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Roof plan illustration, ' + Math.round(g.L * FT) + ' by ' + Math.round(g.S * FT) + ' feet">' + DEFS;
+    var o = '<svg class="htr-rr-plan" viewBox="0 0 ' + W + ' ' + (H + 28) + '" role="img" aria-label="Roof plan illustration, ' + Math.round(g.L * FT) + ' by ' + Math.round(g.S * FT) + ' feet">' + DEFS;
     o += '<rect x="' + x0 + '" y="' + y0 + '" width="' + w + '" height="' + h + '" fill="url(#htrShingle)" stroke="#0b2d4f" stroke-width="1.6"/>';
     var line = function (ax, ay, bx, by) { return '<line x1="' + ax.toFixed(1) + '" y1="' + ay.toFixed(1) + '" x2="' + bx.toFixed(1) + '" y2="' + by.toFixed(1) + '" stroke="#e9edf2" stroke-width="1.6"/>'; };
     if (g.type === 'hip') { var inset = h / 2; o += line(x0 + inset, ym, x1 - inset, ym) + line(x0, y0, x0 + inset, ym) + line(x0, y1, x0 + inset, ym) + line(x1, y0, x1 - inset, ym) + line(x1, y1, x1 - inset, ym); }
@@ -42,7 +42,7 @@
     };
     var Lf = Math.round(g.L * FT) + ' ft', Sf = Math.round(g.S * FT) + ' ft';
     o += dim(x0, y0 - 12, x1, y0 - 12, Lf) + dim(x0, y1 + 22, x1, y1 + 22, Lf) + dim(x0 - 14, y0, x0 - 14, y1, Sf, -90) + dim(x1 + 14, y0, x1 + 14, y1, Sf, 90);
-    return o + '<text class="dim" x="10" y="' + (H - 8) + '">Illustration from measured size &middot; ' + g.faces + ' roof faces &middot; long side ' + (g.longIsEW ? 'east-west' : 'north-south') + '</text></svg>';
+    return o + '<text class="dim" font-size="11" x="10" y="' + (H - 8) + '"><tspan x="10">Illustration from measured size &middot; ' + g.faces + ' roof faces</tspan><tspan x="10" dy="16">Long side ' + (g.longIsEW ? 'east-west' : 'north-south') + '</tspan></text></svg>';
   }
 
   /* 3D roof diagram (isometric) of the same roof on four walls. */
@@ -75,9 +75,9 @@
     var minX = Math.min.apply(null, pts2.map(function (q) { return q[0]; })), maxX = Math.max.apply(null, pts2.map(function (q) { return q[0]; }));
     var minY = Math.min.apply(null, pts2.map(function (q) { return q[1]; })), maxY = Math.max.apply(null, pts2.map(function (q) { return q[1]; }));
     var W = 380, H = 270, s = fit(maxX - minX, maxY - minY, W, H - 20, 24), ox = (W - (maxX - minX) * s) / 2, oy = (H - 20 - (maxY - minY) * s) / 2;
-    var o = '<svg class="htr-rr-plan" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="3D roof diagram illustration">' + DEFS;
+    var o = '<svg class="htr-rr-plan" viewBox="0 0 ' + W + ' ' + (H + 28) + '" role="img" aria-label="3D roof diagram illustration">' + DEFS;
     faces.forEach(function (f) { o += '<polygon points="' + f.p2.map(function (q) { return (ox + (q[0] - minX) * s).toFixed(1) + ',' + (oy + (q[1] - minY) * s).toFixed(1); }).join(' ') + '" fill="' + f.fill + '" stroke="#2b3440" stroke-width="1" stroke-linejoin="round"/>'; });
-    return o + '<text class="dim" x="10" y="' + (H - 8) + '">Illustration &middot; ' + (g.type === 'flat' ? 'flat roof' : g.type + ' roof, ' + esc(r.pitch) + ' pitch') + ' &middot; exact roof lines confirmed at inspection</text></svg>';
+    return o + '<text class="dim" x="10" y="' + (H - 8) + '" font-size="11"><tspan x="10">Illustration &middot; ' + (g.type === 'flat' ? 'flat roof' : g.type + ' roof, ' + esc(r.pitch) + ' pitch') + '</tspan><tspan x="10" dy="16">Exact roof lines confirmed at inspection</tspan></text></svg>';
   }
 
   window.HTRRoofDiagram = { plan: plan, iso: iso, geometry: geometry };

@@ -1,7 +1,7 @@
 <?php
 /**
  * The customer's report: https://site/?htr_roof_report=<token> (32-char random token, not guessable).
- * It is a print-ready page; "Download PDF" opens the browser's Save as PDF. No customer phone/email is shown on it.
+ * It is a print-ready page; "Download PDF" opens the browser's Save as PDF. Customer contact details are included only in the report view.
  */
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -78,6 +78,17 @@ class HTR_RR_Report_Page {
 		);
 	}
 
+	/** Report-only contact details; excluded from the REST status payload. */
+ public static function report_view( array $report ) {
+  $view = self::public_view( $report );
+  $view['customerDetails'] = array(
+   'name' => trim( ( $report['first_name'] ?? '' ) . ' ' . ( $report['last_name'] ?? '' ) ),
+   'email' => $report['email'] ?? '',
+   'phone' => $report['phone'] ?? '',
+  );
+  return $view;
+ }
+
 	public static function maybe_render() {
 		if ( empty( $_GET['htr_roof_report'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 			return;
@@ -90,7 +101,7 @@ class HTR_RR_Report_Page {
 		nocache_headers();
         header( 'Referrer-Policy: same-origin' );
 		header( 'X-Robots-Tag: noindex, nofollow' );
-		$v = self::public_view( $r );
+		$v = self::report_view( $r );
 		include HTR_RR_DIR . 'templates/report.php';
 		exit;
 	}

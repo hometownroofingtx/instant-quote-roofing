@@ -127,18 +127,21 @@ class HTR_RR_Report_Layout {
     }
     public static function save() {
         self::authorize(); $layout=self::posted();
+        $estimate_design=HTR_RR_Estimate_Design::posted();
         update_option(self::OPTION, $layout, false);
+        update_option(HTR_RR_Estimate_Design::OPTION, $estimate_design, false);
         wp_safe_redirect(admin_url('admin.php?page=htr-rr-layout&saved=1')); exit;
     }
     public static function preview() {
         self::authorize(); $report_layout=self::posted();
+        $estimate_design=HTR_RR_Estimate_Design::posted();
         $id=isset($_POST['report_id']) && is_scalar($_POST['report_id']) ? absint($_POST['report_id']) : 0;
         if ($id) {
             $report=HTR_RR_DB::get_report($id);
             if (!$report) { wp_die('Report not found.', '', array('response'=>404)); }
-            $v=HTR_RR_Report_Page::public_view($report); $layout_preview='PRIVATE ADMIN PREVIEW - Report #'.$id;
+            $v=HTR_RR_Report_Page::report_view($report); $layout_preview='PRIVATE ADMIN PREVIEW - Report #'.$id;
         } else {
-            $v=array('address'=>'Sample property - layout preview only', 'firstName'=>'Sample customer', 'createdAt'=>gmdate('Y-m-d H:i:s'), 'measured'=>true, 'customerEntered'=>true, 'areaSqft'=>2500, 'squares'=>25, 'pitch'=>'6/12', 'faces'=>4, 'priceLow'=>15000, 'priceHigh'=>20000, 'roofType'=>'Sample material', 'rateLow'=>6, 'rateHigh'=>8, 'complexity'=>'Sample', 'needsReview'=>true, 'lat'=>0, 'lng'=>0, 'facesDetail'=>array(), 'buildingBox'=>null, 'imageryDate'=>'', 'imageryQuality'=>'', 'phone'=>HTR_RR_Settings::get('company_phone'), 'disclaimer'=>HTR_RR_Settings::get('disclaimer'));
+            $v=array('address'=>'Sample property - layout preview only', 'firstName'=>'Sample customer', 'customerDetails'=>array('name'=>'Sample customer','email'=>'sample@example.com','phone'=>'(555) 010-0123'), 'createdAt'=>gmdate('Y-m-d H:i:s'), 'measured'=>true, 'customerEntered'=>true, 'areaSqft'=>2500, 'squares'=>25, 'pitch'=>'6/12', 'faces'=>4, 'priceLow'=>15000, 'priceHigh'=>20000, 'roofType'=>'Sample material', 'rateLow'=>6, 'rateHigh'=>8, 'complexity'=>'Sample', 'needsReview'=>true, 'lat'=>0, 'lng'=>0, 'facesDetail'=>array(), 'buildingBox'=>null, 'imageryDate'=>'', 'imageryQuality'=>'', 'phone'=>HTR_RR_Settings::get('company_phone'), 'disclaimer'=>HTR_RR_Settings::get('disclaimer'));
             $layout_sample=true;
             $layout_preview='SAMPLE DATA - Layout preview only. These are not customer measurements or a quote.';
         }
@@ -158,6 +161,7 @@ class HTR_RR_Report_Layout {
         <form id="htr-layout-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
             <?php wp_nonce_field('htr_rr_report_layout'); ?>
             <input type="hidden" name="preview_key" value="0"><input type="hidden" name="action" value="htr_rr_layout_save"><input type="hidden" name="layout_json" id="htr-layout-json" value="<?php echo esc_attr(wp_json_encode($layout)); ?>">
+            <?php HTR_RR_Estimate_Design::controls(); ?>
             <div class="htr-layout-toolbar"><button type="button" class="button" data-report-style-open="header">Header style</button><button type="button" class="button" data-report-style-open="footer">Footer style</button><button type="button" class="button" id="htr-layout-add">Add text section</button><button type="button" class="button" id="htr-layout-reset">Restore default order</button></div>
             <p class="description">Drag a section by its handle, or use Move up / Move down. Built-in sections stay in the report; custom text sections can be removed. Basic HTML supports paragraphs, bold, italics, lists and links.</p>
             <div id="htr-layout-sections"></div><p id="htr-layout-status" role="status" aria-live="polite"></p>

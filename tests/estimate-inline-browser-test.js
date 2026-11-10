@@ -1,0 +1,23 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{chromium}=require('playwright');
+(async()=>{const browser=await chromium.launch({headless:true,channel:process.env.HTR_BROWSER_CHANNEL||undefined});try{
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/assets/js/report-estimate.js*',r=>r.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(__dirname,'../assets/js/report-estimate.js'),'utf8')}));
+ await page.route('https://example.test/editor',r=>r.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(__dirname,'.report-layout-admin-preview.html'),'utf8')}));
+ await page.goto('https://example.test/editor');await page.getByRole('button',{name:'Preview unsaved changes'}).click();
+ const revision=await page.locator('[name=preview_key]').inputValue();
+ const html=fs.readFileSync(path.join(__dirname,'.estimate-design-inline-preview.html'),'utf8').replace('data-report-preview-key="1"','data-report-preview-key="'+revision+'"');
+ await page.route('https://example.test/estimate-preview',r=>r.fulfill({contentType:'text/html',body:html}));
+ await page.evaluate(()=>document.getElementById('htr-layout-preview-frame').src='https://example.test/estimate-preview');
+ await page.waitForFunction(()=>document.getElementById('htr-layout-preview-frame').contentDocument?.readyState==='complete');
+ const frame=page.frameLocator('#htr-layout-preview-frame');
+ await frame.locator('[data-estimate-copy="title"]').fill('Our updated estimate');
+ await page.waitForFunction(()=>document.querySelector('[name="estimate_design[title]"]').value==='Our updated estimate');
+ await frame.locator('[data-estimate-copy="tagline"]').first().fill('Updated branding');
+ assert.equal(await frame.locator('[data-estimate-copy="tagline"]').last().innerText(),'Updated branding');
+ await page.evaluate(()=>window.dispatchEvent(new MessageEvent('message',{origin:location.origin,source:window,data:{type:'htr-estimate-copy',previewKey:document.querySelector('[name=preview_key]').value,key:'title',text:'Spoofed'}})));
+ assert.equal(await page.locator('[name="estimate_design[title]"]').inputValue(),'Our updated estimate');
+ await frame.locator('[data-estimate-copy="title"]').fill('Fast edit before preview');
+ await page.evaluate(()=>document.getElementById('htr-layout-preview').click());
+ assert.equal(await page.locator('[name="estimate_design[title]"]').inputValue(),'Fast edit before preview');
+ assert.deepEqual(errors,[]);console.log('Estimate inline checks passed: parent synchronization, repeated branding, spoof rejection and fast-edit flush.');
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1});

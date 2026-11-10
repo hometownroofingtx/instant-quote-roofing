@@ -68,7 +68,14 @@
  });
  function receivePreviewCopy(event){
   const frame=document.getElementById('htr-layout-preview-frame'),data=event.data;
-  if(event.source!==frame.contentWindow||event.origin!==window.location.origin||!data||data.type!=='htr-report-copy'||data.previewKey!==form.elements.preview_key.value||!Number.isInteger(data.index)||typeof data.key!=='string'||typeof data.text!=='string'||data.text.length>20000)return;
+  if(event.source!==frame.contentWindow||event.origin!==window.location.origin||!data||data.previewKey!==form.elements.preview_key.value||typeof data.key!=='string'||typeof data.text!=='string'||data.text.length>20000)return;
+  if(data.type==='htr-estimate-copy'){
+   if(!/^[a-z0-9_]+$/.test(data.key)||data.text.length>1500)return;
+   const control=form.elements.namedItem('estimate_design['+data.key+']');
+   if(!control||control.tagName!=='TEXTAREA')return;
+   control.value=data.text;status.textContent='Estimate preview wording updated. Save report layout to publish these changes.';return;
+  }
+  if(data.type!=='htr-report-copy'||!Number.isInteger(data.index))return;
   const row=previewRows[data.index];if(!row||!list.contains(row))return;
   if(data.custom&&row.dataset.type==='text'){
    if(data.key==='title')row.querySelector('input').value=data.text.slice(0,200);
@@ -89,6 +96,7 @@
    const doc=frame.contentDocument;
    if(!doc||doc.documentElement.dataset.reportPreviewKey!==form.elements.preview_key.value)return;
    doc.querySelectorAll('[data-copy-edited="true"]').forEach(field=>{
+    if(field.dataset.estimateCopy){receivePreviewCopy({source:frame.contentWindow,origin:window.location.origin,data:{type:'htr-estimate-copy',previewKey:form.elements.preview_key.value,key:field.dataset.estimateCopy,text:field.innerText}});delete field.dataset.copyEdited;return;}
     const section=field.closest('[data-report-index]');
     receivePreviewCopy({source:frame.contentWindow,origin:window.location.origin,data:{type:'htr-report-copy',previewKey:form.elements.preview_key.value,index:Number(section.dataset.reportIndex),key:field.dataset.reportCopy||field.dataset.reportField,custom:field.hasAttribute('data-report-field'),text:field.innerText}});
     delete field.dataset.copyEdited;

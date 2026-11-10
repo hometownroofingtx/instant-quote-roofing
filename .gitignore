@@ -14,3 +14,6 @@ tests/.report-contact-preview.html
 tests/.report-contact-bar.png
 tests/.report-print-*.pdf
 tests/.report-full-preview.html
+tests/.estimate-design-*.html
+tests/.estimate-design-*.pdf
+tests/.estimate-design-*.png

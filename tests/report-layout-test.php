@@ -3,7 +3,7 @@
 define('ABSPATH', __DIR__); define('HTR_RR_DIR', dirname(__DIR__).'/'); define('HTR_RR_URL', '../'); define('HTR_RR_VERSION', 'test');
 class WP_Error { public function __construct($code,$message){} }
 function is_wp_error($value){return $value instanceof WP_Error;}
-function get_option($key,$default=false){return $GLOBALS['layout_option'] ?? $default;}
+function get_option($key,$default=false){return $key==='htr_rr_estimate_design' ? ($GLOBALS['estimate_option'] ?? $default) : ($GLOBALS['layout_option'] ?? $default);}
 function sanitize_text_field($value){return trim(strip_tags($value));}
 function wp_kses($value,$allowed){return strip_tags($value, '<'.implode('><',array_keys($allowed)).'>');} // Test double; production uses WordPress KSES.
 function wpautop($value){return '<p>'.$value.'</p>';}
@@ -14,6 +14,7 @@ function wp_date($format,$timestamp){return gmdate($format,$timestamp);}
 function wp_json_encode($value,$flags=0){return json_encode($value,$flags);}
 class HTR_RR_Settings {public static function get($key){return $key==='google_browser_key' ? ($GLOBALS['browser_fixture'] ?? '') : '';}}
 class HTR_RR_Report_Page {public static function money($value){return '$'.number_format($value);}}
+require HTR_RR_DIR.'includes/class-estimate-design.php';
 require HTR_RR_DIR.'includes/class-report-layout.php';
 $checks=0;
 function check($ok,$message){global $checks;$checks++;if(!$ok)throw new RuntimeException($message);}
@@ -29,7 +30,7 @@ check(is_wp_error(HTR_RR_Report_Layout::sanitize(array(array('type'=>'text','con
 check(is_wp_error(HTR_RR_Report_Layout::sanitize(array(array('type'=>'text','content'=>array())))),'Malformed content rejected');
 check(!isset(HTR_RR_Report_Layout::allowed_html()['script']) && !isset(HTR_RR_Report_Layout::allowed_html()['iframe']) && !isset(HTR_RR_Report_Layout::allowed_html()['img']),'Unsafe/embed/tracking tags disallowed');
 $GLOBALS['layout_option']=array(array('type'=>'bad'));check(HTR_RR_Report_Layout::get()===$defaults,'Bad saved layout falls back');
-$v=array('address'=>'Sample property', 'firstName'=>'Preview', 'createdAt'=>'2026-11-09 00:00:00','measured'=>true,'customerEntered'=>false,'areaSqft'=>2500,'squares'=>25,'pitch'=>'6/12','faces'=>4,'priceLow'=>15000,'priceHigh'=>20000,'roofType'=>'Sample','rateLow'=>6,'rateHigh'=>8,'complexity'=>'Sample','needsReview'=>true,'lat'=>29,'lng'=>-98,'facesDetail'=>array(array('area'=>2500,'pitch'=>6)),'buildingBox'=>null,'imageryDate'=>'2026-01','imageryQuality'=>'HIGH','phone'=>'','disclaimer'=>'Test disclaimer');
+$v=array('address'=>'Sample property', 'firstName'=>'Preview', 'customerDetails'=>array('name'=>'Test Customer','email'=>'customer@example.test','phone'=>'555-0100'), 'createdAt'=>'2026-11-09 00:00:00','measured'=>true,'customerEntered'=>false,'areaSqft'=>2500,'squares'=>25,'pitch'=>'6/12','faces'=>4,'priceLow'=>15000,'priceHigh'=>20000,'roofType'=>'Sample','rateLow'=>6,'rateHigh'=>8,'complexity'=>'Sample','needsReview'=>true,'lat'=>29,'lng'=>-98,'facesDetail'=>array(array('area'=>2500,'pitch'=>6)),'buildingBox'=>null,'imageryDate'=>'2026-01','imageryQuality'=>'HIGH','phone'=>'','disclaimer'=>'Test disclaimer');
 $report_layout=$layout;ob_start();include HTR_RR_DIR.'templates/report.php';$html=ob_get_clean();
 check(strpos($html,'Test disclaimer')<strpos($html,'Our process'),'Renderer respects custom order');
 check(strpos($html,'$15,000')!==false && strpos($html,'2,500 sq ft')!==false,'Actual generated price/metrics retained');
@@ -96,3 +97,49 @@ $GLOBALS['browser_fixture']='fixture';$v['customerEntered']=false;$v['measured']
 $report_layout=HTR_RR_Report_Layout::sanitize(array(array('type'=>'header'),array('type'=>'summary'),array('type'=>'aerial'),array('type'=>'diagrams'),array('type'=>'next'),array('type'=>'footer','style'=>$contact_style)));
 ob_start();include HTR_RR_DIR.'templates/report.php';$full_html=ob_get_clean();file_put_contents(__DIR__.'/.report-full-preview.html',$full_html);
 function add_query_arg($args,$url){return $url.'?'.http_build_query($args);}
+
+check(HTR_RR_Estimate_Design::get()['template']==='classic','Existing reports remain Classic by default');
+check(is_wp_error(HTR_RR_Estimate_Design::sanitize(array('template'=>'../../bad'))),'Unknown template rejected');
+check(is_wp_error(HTR_RR_Estimate_Design::sanitize(array('inspection_url'=>'javascript:alert(1)'))),'Unsafe inspection link rejected');
+$v['faces']=9;$v['facesDetail']=array_map(function($area){return array('area'=>$area,'pitch'=>6);},array(300,300,300,300,300,300,300,200,200));
+$estimate_design=HTR_RR_Estimate_Design::sanitize(array('template'=>'estimate'));
+$v['phone']='(830) 283-4314';unset($layout_preview);$report_layout=HTR_RR_Report_Layout::defaults();
+ob_start();include HTR_RR_DIR.'templates/report.php';$estimate_html=ob_get_clean();
+check(substr_count($estimate_html,'class="estimate-page')===2,'Standard measured report has cover/details pages');
+check(strpos($estimate_html,'$15,000 - $20,000')!==false,'New design uses existing report pricing');
+check(strpos($estimate_html,'2,500')!==false,'New design uses existing measurements');
+check(strpos($estimate_html,'LIFETIME TRANSFERABLE')===false,'Unapproved warranty claims not invented');
+check(strpos($estimate_html,'assets/img/bbb-rating.png')!==false&&strpos($estimate_html,'<figcaption>A+ BBB Rating</figcaption>')!==false,'Requested BBB artwork and caption included');
+file_put_contents(__DIR__.'/.estimate-design-preview.html',$estimate_html);
+$v['facesDetail']=array_fill(0,35,array('area'=>100,'pitch'=>6));
+ob_start();include HTR_RR_DIR.'templates/report.php';$long_estimate=ob_get_clean();
+check(substr_count($long_estimate,'class="estimate-page')===4,'Long measurement table gets continuation pages');
+check(strpos($long_estimate,'>35</td>')!==false,'Continuation retains final face');
+file_put_contents(__DIR__.'/.estimate-design-long-preview.html',$long_estimate);
+$v['measured']=false;$v['priceLow']=null;$v['priceHigh']=null;$v['facesDetail']=array();$v['customerEntered']=true;
+ob_start();include HTR_RR_DIR.'templates/report.php';$unavailable_estimate=ob_get_clean();
+check(strpos($unavailable_estimate,'On-site quote required')!==false,'No measurement does not invent pricing');
+check(strpos($unavailable_estimate,'Based on customer-entered dimensions')!==false,'Manual source clearly labeled');
+echo "Estimate design checks passed. Total checks: $checks\n";
+check(is_wp_error(HTR_RR_Estimate_Design::sanitize(array('header_color'=>'red;position:fixed'))),'Estimate brand CSS injection rejected');
+$estimate_design=HTR_RR_Estimate_Design::sanitize(array('template'=>'estimate','diagrams'=>'1'));
+$v['measured']=true;$v['customerEntered']=false;$v['facesDetail']=array(array('area'=>2500,'pitch'=>6));
+$report_layout=HTR_RR_Report_Layout::sanitize(array(array('type'=>'text','title'=>'Extra details','content'=>'Retained custom report text.')));
+ob_start();include HTR_RR_DIR.'templates/report.php';$appendix_html=ob_get_clean();
+check(strpos($appendix_html,'id="htr-rr-diagram-data"')!==false,'Available measured diagrams retained as optional appendix');
+check(strpos($appendix_html,'Retained custom report text.')!==false,'Existing custom text retained in appendix');
+echo "Estimate appendix/color checks passed. Total checks: $checks\n";$layout_preview='PRIVATE EDITABLE PREVIEW';$layout_preview_key='1';
+ob_start();include HTR_RR_DIR.'templates/report.php';$editable_estimate=ob_get_clean();
+check(strpos($editable_estimate,'data-estimate-copy="title"')!==false,'Estimate preview wording editable');
+check(strpos($estimate_html,'contenteditable=')===false,'Customer estimate remains read only');
+check(strpos(HTR_RR_Estimate_Design::text(array('title'=>'<script>bad</script>'),'title',true),'&lt;script&gt;')!==false,'Editable wording escaped');
+file_put_contents(__DIR__.'/.estimate-design-inline-preview.html',$editable_estimate);
+echo "Estimate inline checks passed. Total checks: $checks\n";
+
+check(strpos($estimate_html,'customer@example.test')!==false,'Estimate includes saved customer email');
+check(strpos($html,'Test Customer')!==false && strpos($html,'555-0100')!==false,'Classic includes customer name and phone');
+$v['customerDetails']=array('name'=>'<script>bad</script>','email'=>'<img src=x>','phone'=>'');
+ob_start();include HTR_RR_DIR.'templates/report-sections/customer-details.php';$customer_html=ob_get_clean();
+check(strpos($customer_html,'&lt;script&gt;')!==false && strpos($customer_html,'<img')===false,'Customer fields escaped');
+check(strpos($customer_html,'Phone:')===false,'Missing contact field omitted');
+echo "Customer detail checks passed. Total checks: $checks\n";
