@@ -17,6 +17,8 @@ class HTR_RR_Admin {
 		add_filter( 'set_screen_option_htr_rr_reports_per_page', array( __CLASS__, 'save_screen_option' ), 10, 3 );
 		add_filter( 'set_screen_option_htr_rr_logs_per_page', array( __CLASS__, 'save_screen_option' ), 10, 3 );
 		add_action( 'admin_post_htr_rr_save', array( __CLASS__, 'save' ) );
+		add_action( 'admin_post_htr_rr_create_quote', array( __CLASS__, 'create_quote' ) );
+		add_action( 'wp_ajax_htr_rr_admin_quote', array( __CLASS__, 'ajax_quote' ) );
 		add_action( 'admin_post_htr_rr_export_pricing', array( __CLASS__, 'export_pricing' ) );
 		add_action( 'admin_post_htr_rr_export_reports', array( __CLASS__, 'export_reports' ) );
 		add_action( 'admin_post_htr_rr_import_pricing', array( __CLASS__, 'import_pricing' ) );
@@ -28,6 +30,7 @@ class HTR_RR_Admin {
 	public static function menu() {
 		add_menu_page( 'Roof Reports', 'Roof Reports', self::CAP, 'htr-rr', array( __CLASS__, 'overview' ), 'dashicons-admin-home', 26 );
 		add_submenu_page( 'htr-rr', 'Overview', 'Overview', self::CAP, 'htr-rr', array( __CLASS__, 'overview' ) );
+		add_submenu_page( 'htr-rr', 'Create Quote', 'Create Quote', self::CAP, 'htr-rr-create', array( __CLASS__, 'create_quote_page' ) );
 		$reports_hook = add_submenu_page( 'htr-rr', 'Reports', 'Reports', self::CAP, 'htr-rr-reports', array( __CLASS__, 'reports' ) );
 		add_action( 'load-' . $reports_hook, array( __CLASS__, 'reports_screen_options' ) );
 		add_submenu_page( 'htr-rr', 'Pricing', 'Pricing', self::CAP, 'htr-rr-pricing', array( __CLASS__, 'pricing' ) );
@@ -84,6 +87,9 @@ class HTR_RR_Admin {
 			return;
 		}
 		wp_enqueue_style( 'htr-rr-admin', HTR_RR_URL . 'assets/css/admin.css', array(), HTR_RR_VERSION . '.' . filemtime( HTR_RR_DIR . 'assets/css/admin.css' ) );
+		if ( false !== strpos( $hook, 'htr-rr-create' ) ) {
+			wp_enqueue_style( 'htr-rr', HTR_RR_URL . 'assets/css/roof-report.css', array(), HTR_RR_VERSION . '.' . filemtime( HTR_RR_DIR . 'assets/css/roof-report.css' ) );
+		}
 		if ( false !== strpos( $hook, 'htr-rr-settings' ) || false !== strpos( $hook, 'htr-rr-pricing' ) ) {
 			wp_enqueue_script( 'htr-rr-settings-admin', HTR_RR_URL . 'assets/js/settings-admin.js', array(), HTR_RR_VERSION . '.' . filemtime( HTR_RR_DIR . 'assets/js/settings-admin.js' ), true );
 		}
@@ -130,9 +136,47 @@ class HTR_RR_Admin {
 	}
 
 	private static function status_pill( $s ) {
-		$map = array( 'completed' => 'ok', 'review' => 'warn', 'processing' => 'info', 'pending' => 'info', 'awaiting_form' => 'warn', 'ghl_submitted' => 'ok', 'sent' => 'ok', 'failed' => 'bad' );
-		$labels = array( 'completed' => 'Completed', 'review' => 'Needs review', 'processing' => 'Processing', 'pending' => 'Pending', 'awaiting_form' => 'Waiting for GHL form', 'ghl_submitted' => 'Form submitted (browser)', 'sent' => 'Sent', 'failed' => 'Delivery failed' );
+		$map = array( 'completed' => 'ok', 'review' => 'warn', 'processing' => 'info', 'pending' => 'info', 'awaiting_form' => 'warn', 'ghl_submitted' => 'ok', 'internal' => 'info', 'sent' => 'ok', 'failed' => 'bad' );
+		$labels = array( 'completed' => 'Completed', 'review' => 'Needs review', 'processing' => 'Processing', 'pending' => 'Pending', 'awaiting_form' => 'Waiting for GHL form', 'ghl_submitted' => 'Form submitted (browser)', 'internal' => 'Internal quote (no GHL)', 'sent' => 'Sent', 'failed' => 'Delivery failed' );
 		return '<span class="htr-pill htr-pill--' . esc_attr( isset( $map[ $s ] ) ? $map[ $s ] : 'info' ) . ' htr-status--' . esc_attr( sanitize_key( $s ) ) . '">' . esc_html( $labels[ $s ] ?? ucfirst( $s ) ) . '</span>';
+	}
+
+	/** Staff-only quote creation; public form settings are never changed. */
+	public static function create_quote_page() {
+		if ( ! current_user_can( self::CAP ) ) { wp_die( 'Not allowed.' ); }
+		self::head( 'Create Quote', 'Preview a quote without saving to Reports, collecting contact details or sending a lead. Download links expire after one hour.' );
+		echo HTR_RR_Shortcode::render( array( 'backend' => true ) ); // Shared frontend markup; escaped in its template.
+		echo '</div>';
+	}
+
+	public static function ajax_quote() {
+		if ( ! current_user_can( self::CAP ) || ! check_ajax_referer( 'htr_rr_admin_quote', 'nonce', false ) ) {
+			wp_send_json( array( 'ok' => false, 'message' => 'Your administrator session expired. Reload this page.' ), 403 );
+		}
+		$req = new WP_REST_Request( 'POST' );
+		$req->set_header( 'content-type', 'application/json' );
+		$req->set_body( (string) file_get_contents( 'php://input' ) );
+		$res = HTR_RR_REST::create( $req, false, true, false, true );
+		$result = $res->get_data();
+		wp_send_json( $result, $res->get_status() );
+	}
+
+	public static function create_quote() {
+		if ( ! current_user_can( self::CAP ) ) { wp_die( 'Not allowed.', '', array( 'response' => 403 ) ); }
+		check_admin_referer( 'htr_rr_create_quote' );
+		$data = array();
+		foreach ( array( 'address', 'lat', 'lng', 'material' ) as $key ) {
+			$data[ $key ] = isset( $_POST[ $key ] ) && is_scalar( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : '';
+		}
+		$data['source_url'] = admin_url( 'admin.php?page=htr-rr-create' );
+		$req = new WP_REST_Request( 'POST' );
+		$req->set_header( 'content-type', 'application/json' );
+		$req->set_body( wp_json_encode( $data ) );
+		$res = HTR_RR_REST::create( $req, false, true, false, true );
+		$result = $res->get_data();
+		if ( empty( $result['ok'] ) ) { wp_die( esc_html( $result['message'] ?? 'Quote could not be generated.' ), 'Create Quote', array( 'back_link' => true, 'response' => $res->get_status() ) ); }
+		wp_safe_redirect( $result['report']['url'] );
+		exit;
 	}
 
 	/* ---------------- Overview ---------------- */
@@ -141,7 +185,7 @@ class HTR_RR_Admin {
 		$t   = HTR_RR_DB::reports();
 		// Portable SQL (no MySQL-only date functions): the 30-day cutoff is computed in PHP.
 		$cut = gmdate( 'Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS );
-		$c   = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) AS total, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed, SUM(CASE WHEN status='review' THEN 1 ELSE 0 END) AS review, SUM(CASE WHEN lead_status NOT IN ('sent','ghl_submitted') THEN 1 ELSE 0 END) AS lead_open, SUM(CASE WHEN created_at >= %s THEN 1 ELSE 0 END) AS last30 FROM $t", $cut ), ARRAY_A ); // phpcs:ignore
+		$c   = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) AS total, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) AS completed, SUM(CASE WHEN status='review' THEN 1 ELSE 0 END) AS review, SUM(CASE WHEN lead_status NOT IN ('sent','ghl_submitted','internal') THEN 1 ELSE 0 END) AS lead_open, SUM(CASE WHEN created_at >= %s THEN 1 ELSE 0 END) AS last30 FROM $t", $cut ), ARRAY_A ); // phpcs:ignore
 		$sum = $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM((price_low+price_high)/2.0),0) FROM $t WHERE price_low IS NOT NULL AND created_at >= %s", $cut ) ); // phpcs:ignore
 		self::head( 'Instant Roof Report', 'Roof estimates, customer reports and lead delivery in one place.' );
 		$s = HTR_RR_Settings::all();
@@ -294,7 +338,7 @@ class HTR_RR_Admin {
 		) );
 		echo '<section class="htr-box htr-detail-card"><h2>Lead delivery</h2><dl class="htr-detail-list"><div><dt>Delivery status</dt><dd>' . self::status_pill( $r['lead_status'] ) . '</dd></div><div><dt>Delivery attempts</dt><dd>' . (int) $r['lead_tries'] . '</dd></div></dl>';
 		if ( ! empty( $r['lead_error'] ) ) { echo '<div class="htr-detail-delivery-error"><strong>Last recorded delivery error</strong><p>' . esc_html( $r['lead_error'] ) . '</p></div>'; }
-		echo '<p class="htr-detail-note">Use Resend lead to GHL to retry delivery. Check the activity log below for request details.</p></section></div>';
+		echo '<p class="htr-detail-note">' . ( 'internal' === $r['lead_status'] ? 'Internal quote. GHL delivery is disabled.' : 'Use Resend lead to GHL to retry delivery. Check the activity log below for request details.' ) . '</p></section></div>';
 		if ( $estimate ) {
 			$fields = array( 'billed_sqft' => 'Area used for pricing (sq ft)', 'rate_low' => 'Low rate ($/sq ft)', 'rate_high' => 'High rate ($/sq ft)', 'pitch_mult' => 'Pitch multiplier', 'complexity' => 'Roof complexity', 'complexity_mult' => 'Complexity multiplier', 'region_mult' => 'Regional multiplier' );
 			$values = array();
@@ -768,6 +812,9 @@ class HTR_RR_Admin {
 		}
 		check_admin_referer( 'htr_rr_resend_' . $id );
 		$report = HTR_RR_DB::get_report( $id );
+		if ( $report && 'internal' === $report['lead_status'] ) {
+			wp_die( 'Internal quotes are not sent to GHL.', 'Internal quote', array( 'back_link' => true, 'response' => 400 ) );
+		}
 		if ( ! $report || 'awaiting_form' === $report['lead_status'] ) {
 			wp_die( 'This report cannot be resent until its GHL contact form is linked.', 'Waiting for contact', array( 'back_link' => true, 'response' => 400 ) );
 		}

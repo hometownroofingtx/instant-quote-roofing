@@ -381,3 +381,18 @@ Roof Reports > Report Layout > Report template & estimate design now offers the 
 - The standalone form supports the explicitly allowed GHL origin and hides the injected Storm Alert. See the embed instructions above.
 
 Deploy the matching plugin files together. Local validation includes 62 isolated report checks, browser/PDF checks at 375px and 1366px (including longer warranty/disclaimer content), and local HTTP framing headers. These do not prove production headers, GHL submissions, or a live customer PDF. Generated fixtures and PDFs remain excluded from Git.
+
+
+## Administrator quote previews
+
+Add `[htr_roof_quote_preview]` to a Shortcode block on a WordPress page, or open **Roof Reports > Create Quote**. Only logged-in administrators with `manage_options` can use the tool. Other visitors see an access message.
+
+The preview reuses the frontend address search, satellite map with draggable pin, roof-type cards, sidebar, loading state and report results. It skips contact collection and all GHL/n8n lead delivery. No row is added to Reports and no automatic customer email is sent. Public quote forms keep their existing behavior.
+
+PDF and full-preview links use a temporary one-hour cache and require the same administrator who generated the quote. Regenerate an expired quote. Exclude this page from page/CDN caching; the shortcode also marks its response non-cacheable. Place the shortcode by itself rather than with another quote/calculator form.
+
+Uses the existing Google browser/server keys and saved Pricing settings. If aerial measurements are unavailable, the preview requests manual measurement rather than inventing a price.
+
+Deploy matching files under this plugin: `includes/class-admin.php`, `includes/class-shortcode.php`, `includes/class-rest.php`, `includes/class-report-page.php`, `includes/class-leads.php`, `templates/form.php`, `assets/js/roof-report.js`, `assets/css/roof-report.css`, and `assets/css/admin.css`. See [the internal quote guide](docs/internal-quotes.md). No database schema update is required.
+
+Validation: `php tests/calculator-test.php` checks no Reports insert, no lead send, administrator-only generation and unchanged public GHL gating. `php tests/preview-shortcode-test.php` checks shortcode access in a local WordPress installation. `node tests/admin-quote-browser-test.js` checks the wizard at mobile/desktop widths using the existing local `.instant-plugin-preview.html` fixture. Local fixtures do not verify live Google APIs, GHL or production deployment.

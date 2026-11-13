@@ -17,7 +17,10 @@ class WP_REST_Response {
 function get_transient( $key ) { return $GLOBALS['transients'][ $key ] ?? false; }
 function set_transient( $key, $value, $ttl ) { $GLOBALS['transients'][ $key ] = $value; return true; }
 function delete_transient( $key ) { unset( $GLOBALS['transients'][ $key ] ); }
-function current_user_can( $cap ) { return false; }
+function current_user_can( $cap ) { return ! empty( $GLOBALS['test_admin'] ); }
+function get_current_user_id() { return ! empty( $GLOBALS['test_admin'] ) ? 42 : 0; }
+function home_url( $path ) { return 'https://example.test' . $path; }
+function add_query_arg( $key, $value, $url ) { return $url . '?' . urlencode( $key ) . '=' . urlencode( $value ); }
 function wp_unslash( $value ) { return $value; }
 function wp_salt( $scheme ) { return 'isolated-test'; }
 function sanitize_email( $value ) { return $value; }
@@ -206,3 +209,25 @@ check( HTR_RR_REST::email_copy( new WP_REST_Request( array( 'token' => $GLOBALS[
 $GLOBALS['report']['lead_status'] = 'ghl_submitted';
 check( HTR_RR_REST::status( new WP_REST_Request( array( 'token' => $GLOBALS['report']['token'] ) ) )->data['linked'], 'Historical browser submissions retain report access' );
 echo "Security gate checks complete. Total checks: $checks\n";
+
+$internal_input = array( 'address' => '123 Main Street', 'lat' => 29.42, 'lng' => -98.49, 'material' => array_key_first( $GLOBALS['saved']['materials'] ) );
+check( HTR_RR_REST::create( new WP_REST_Request( $internal_input ), false, true, false, true )->status === 403, 'Non-admin cannot create an internal quote' );
+$GLOBALS['test_admin'] = true;
+$sent_before = count( $GLOBALS['sent'] ?? array() );
+$inserts_before = $GLOBALS['wpdb']->insert_id;
+foreach ( array( 'ghl_form', 'plugin' ) as $mode ) {
+ $GLOBALS['saved']['contact_mode'] = $mode;
+ $internal = HTR_RR_REST::create( new WP_REST_Request( $internal_input ), false, true, false, true );
+ check( $internal->status === 200 && $internal->data['ok'], 'Admin quote works in ' . $mode . ' mode without contact details' );
+ check( $GLOBALS['wpdb']->insert_id === $inserts_before, 'Admin quote creates no Reports row' );
+ $preview = get_transient( 'htr_rr_preview_' . $internal->data['report']['token'] );
+ check( $preview['lead_status'] === 'internal' && $preview['_preview_user'] === 42, 'Temporary preview belongs to the requesting administrator' );
+ check( empty( $internal->data['report_id'] ) && ! empty( $internal->data['temporary'] ), 'Preview response has no saved report identifier' );
+ check( strpos( $internal->data['report']['url'], 'htr_roof_preview=' ) !== false, 'Download uses temporary preview URL' );
+ check( empty( $internal->data['report']['locked'] ), 'Admin quote report is accessible without a GHL submission' );
+ check( count( $GLOBALS['sent'] ?? array() ) === $sent_before, 'Admin quote sends no outbound lead' );
+}
+$GLOBALS['saved']['contact_mode'] = 'ghl_form';
+check( HTR_RR_REST::create( new WP_REST_Request( array_merge( $internal_input, array( 'backend' => true ) ) ) )->status === 403, 'Request data cannot enable the backend bypass' );
+$GLOBALS['test_admin'] = false;
+echo "Internal quote security checks complete. Total checks: $checks\n";

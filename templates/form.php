@@ -4,11 +4,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 $cfg = HTR_RR_Settings::public_config();
+$backend = ! empty( $backend ) && current_user_can( 'manage_options' );
 $quote = HTR_RR_Settings::get( 'quote_design' );
 $quote_steps = array();
 $quote_steps = array( $quote['journey_property'], $quote['journey_contact'], $quote['journey_report'] );
+if ( $backend ) {
+    $quote_steps = array( $quote['journey_property'], $quote['journey_report'] );
+    $quote['journey_continue'] = 'Generate internal quote';
+}
+$quote_step_descriptions = $backend
+    ? array( $quote['journey_description'], 'Generate and save the roof report without contact collection or GHL delivery.' )
+    : array( $quote['journey_description'], $quote['step_4_description'], $quote['step_6_description'] );
 ?>
-<div class="htr-quote-layout"><div class="htr-rr htr-rr-wizard" id="htr-rr" data-step="1" data-journey="three" data-quote-copy="<?php echo esc_attr( wp_json_encode( $quote ) ); ?>">
+<div class="htr-quote-layout"><div class="htr-rr htr-rr-wizard" id="htr-rr" data-step="1" data-journey="three"<?php if ( $backend ) : ?> data-internal-quote<?php endif; ?> data-quote-copy="<?php echo esc_attr( wp_json_encode( $quote ) ); ?>">
  <ol class="htr-quote-steps" aria-label="Roof quote progress"><?php foreach ( $quote_steps as $i => $label ) : ?><li data-quote-step="<?php echo (int) $i + 1; ?>"><span><?php echo (int) $i + 1; ?></span><b><?php echo esc_html( $label ); ?></b></li><?php endforeach; ?></ol>
 	<?php if ( empty( $cfg['browserKey'] ) ) : ?>
 		<div class="htr-rr-alert htr-rr-alert--warn">
@@ -25,7 +33,7 @@ $quote_steps = array( $quote['journey_property'], $quote['journey_contact'], $qu
 		</ul>
 	</header>
 
-	<p class="htr-quote-step-status" data-journey-status role="status">Step 1 of 3</p>
+	<p class="htr-quote-step-status" data-journey-status role="status">Step 1 of <?php echo $backend ? '2' : '3'; ?></p>
     <div class="htr-rr-grid">
 		<!-- 1. Find your property -->
 		<section class="htr-rr-card" data-card="1">
@@ -84,6 +92,7 @@ $quote_steps = array( $quote['journey_property'], $quote['journey_contact'], $qu
             <div class="htr-quote-nav"><button type="button" class="htr-rr-btn htr-rr-btn--ghost" data-quote-back="2"><?php echo esc_html( $quote['back'] ); ?></button><button type="button" class="htr-rr-btn" data-quote-contact disabled><?php echo esc_html( $quote['journey_continue'] ); ?></button></div>
 		</section>
 
+		<?php if ( ! $backend ) : ?>
 		<!-- 4. Contact -->
 		<section class="htr-rr-card" data-card="4" aria-disabled="true">
 			<h3><?php echo esc_html( $quote['journey_contact_heading'] ); ?></h3>
@@ -119,6 +128,7 @@ $quote_steps = array( $quote['journey_property'], $quote['journey_contact'], $qu
             <div class="htr-quote-nav"><button type="button" class="htr-rr-btn htr-rr-btn--ghost" data-quote-back="3"><?php echo esc_html( $quote['back'] ); ?></button></div>
 		</section>
 
+		<?php endif; ?>
 		<!-- 5. Analysing -->
 		<section class="htr-rr-card" data-card="5" aria-disabled="true">
 			<h3><?php echo esc_html( $quote['step_5_heading'] ); ?></h3>
@@ -140,6 +150,6 @@ $quote_steps = array( $quote['journey_property'], $quote['journey_contact'], $qu
 <aside class="htr-quote-sidebar" aria-label="About your roof quote">
  <?php if ( $quote['sidebar'] ) : ?><div class="htr-quote-sidebar-photo"><?php echo wp_get_attachment_image( $quote['sidebar'], 'large', false, array( 'alt' => '', 'loading' => 'lazy' ) ); ?></div><?php endif; ?>
  <div class="htr-quote-sidebar-content"><h2><?php echo esc_html( $quote['sidebar_title'] ); ?></h2><p><?php echo esc_html( $quote['sidebar_text'] ); ?></p>
- <ol><?php foreach ( $quote_steps as $i => $label ) : ?><li><span><?php echo (int) $i + 1; ?></span><div><strong><?php echo esc_html( $label ); ?></strong><p><?php echo esc_html( array( $quote['journey_description'], $quote['step_4_description'], $quote['step_6_description'] )[ $i ] ); ?></p></div></li><?php endforeach; ?></ol>
+ <ol><?php foreach ( $quote_steps as $i => $label ) : ?><li><span><?php echo (int) $i + 1; ?></span><div><strong><?php echo esc_html( $label ); ?></strong><p><?php echo esc_html( $quote_step_descriptions[ $i ] ); ?></p></div></li><?php endforeach; ?></ol>
  <div class="htr-quote-reassurance"><strong><?php echo esc_html( $quote['reassurance_title'] ); ?></strong><p><?php echo esc_html( $quote['reassurance_text'] ); ?></p></div></div>
 </aside></div>

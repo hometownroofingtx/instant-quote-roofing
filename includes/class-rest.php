@@ -271,9 +271,12 @@ class HTR_RR_REST {
 		return new WP_REST_Response( array( 'ok' => true, 'linked' => true, 'delivered' => (bool) $sent ), 200 );
 	}
 
-	public static function create( WP_REST_Request $req, $calculator = false, $deferred = false, $draft = false ) {
-        if ( ! $deferred && 'ghl_form' === HTR_RR_Settings::public_config()['contactMode'] ) { return self::fail( 'ghl_required', 'Please submit the contact form to receive your report.', 403 ); }
-		if ( $deferred && 'ghl_form' !== HTR_RR_Settings::public_config()['contactMode'] ) {
+	public static function create( WP_REST_Request $req, $calculator = false, $deferred = false, $draft = false, $backend = false ) {
+        // This flag is passed only by the nonce-checked admin handler, never from request data.
+        if ( $backend && ! current_user_can( 'manage_options' ) ) { return self::fail( 'forbidden', 'Not allowed.', 403 ); }
+        if ( $backend ) { $draft = true; }
+        if ( ! $backend && ! $deferred && 'ghl_form' === HTR_RR_Settings::public_config()['contactMode'] ) { return self::fail( 'ghl_required', 'Please submit the contact form to receive your report.', 403 ); }
+		if ( ! $backend && $deferred && 'ghl_form' !== HTR_RR_Settings::public_config()['contactMode'] ) {
 			return self::fail( 'disabled', 'The GHL contact step is not enabled.', 403 );
 		}
 		$p = $req->get_json_params();
@@ -374,7 +377,7 @@ class HTR_RR_REST {
 				'town_miles' => $near ? $near['miles'] : null,
 				'source_url' => esc_url_raw( isset( $p['source_url'] ) ? substr( (string) $p['source_url'], 0, 250 ) : '' ),
 				'ip_hash'    => $ip,
-				'lead_status' => $deferred ? 'awaiting_form' : 'pending',
+				'lead_status' => $backend ? 'internal' : ( $deferred ? 'awaiting_form' : 'pending' ),
 			);
 		if ( $draft ) {
 			$id = 0;
@@ -437,15 +440,22 @@ class HTR_RR_REST {
 			);
 		if ( $draft ) {
 			$record = array_merge( $record, $measured );
-			if ( ! set_transient( 'htr_rr_draft_' . $token, $record, 2 * DAY_IN_SECONDS ) ) { return self::fail( 'server', 'The temporary quote could not be prepared.', 500 ); }
+			$cache_key = $backend ? 'htr_rr_preview_' . $token : 'htr_rr_draft_' . $token;
+			if ( $backend ) { $record['_preview_user'] = get_current_user_id(); }
+			if ( ! set_transient( $cache_key, $record, $backend ? HOUR_IN_SECONDS : 2 * DAY_IN_SECONDS ) ) { return self::fail( 'server', 'The temporary quote could not be prepared.', 500 ); }
 		} else { HTR_RR_DB::update_report( $id, $measured ); }
 		// 6. Lead to GHL (through n8n). Failure here never blocks the customer; WP-Cron retries.
-		if ( ! $deferred ) {
+		if ( ! $deferred && ! $backend ) {
 			HTR_RR_Leads::send( $id );
 		}
 
 		$r = $draft ? $record : HTR_RR_DB::get_report( $id );
 		$response = array( 'ok' => true, 'report' => self::browser_report( $r ) );
+		if ( $backend ) {
+			$response['report']['url'] = add_query_arg( 'htr_roof_preview', $token, home_url( '/' ) );
+			$response['temporary'] = true;
+			return new WP_REST_Response( $response, 200 );
+		}
 		if ( $calculator ) {
 			$response['estimate'] = $deferred ? array( 'ok' => false, 'locked' => true ) : $e;
 			$response['town'] = $near ? $near['town'] : '';

@@ -90,6 +90,21 @@ class HTR_RR_Report_Page {
  }
 
 	public static function maybe_render() {
+		if ( isset( $_GET['htr_roof_preview'] ) ) {
+			$token = is_string( $_GET['htr_roof_preview'] ) ? sanitize_text_field( wp_unslash( $_GET['htr_roof_preview'] ) ) : '';
+			$r = current_user_can( 'manage_options' ) && preg_match( '/^[a-f0-9]{32}$/', $token ) ? get_transient( 'htr_rr_preview_' . $token ) : false;
+			if ( ! is_array( $r ) || (int) ( $r['_preview_user'] ?? 0 ) !== get_current_user_id() ) {
+				wp_die( 'This temporary quote has expired or is unavailable to this administrator.', 'Quote preview unavailable', array( 'response' => 404 ) );
+			}
+			nocache_headers();
+			header( 'Referrer-Policy: same-origin' );
+			header( 'X-Robots-Tag: noindex, nofollow' );
+			$v = self::report_view( $r );
+			$v['temporaryPreview'] = true;
+			$v['url'] = add_query_arg( 'htr_roof_preview', $token, home_url( '/' ) );
+			include HTR_RR_DIR . 'templates/report.php';
+			exit;
+		}
 		if ( empty( $_GET['htr_roof_report'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 			return;
 		}

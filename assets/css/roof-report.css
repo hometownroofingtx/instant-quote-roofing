@@ -300,6 +300,7 @@
 
 /* Three customer steps; map/material sections remain progressively revealed within property details. */
 #htr-rr[data-journey="three"] .htr-quote-steps{grid-template-columns:repeat(3,minmax(0,1fr))}
+#htr-rr[data-journey="three"][data-internal-quote] .htr-quote-steps{grid-template-columns:repeat(2,minmax(0,1fr))}
 #htr-rr[data-journey="three"] .htr-quote-steps li{font-size:13px}
 #htr-rr[data-journey="three"] .htr-rr-grid{display:block}
 #htr-rr[data-journey="three"] [data-card]+[data-card]:not([hidden]){border-top:1px solid #dce6f1;margin-top:20px;padding-top:24px}

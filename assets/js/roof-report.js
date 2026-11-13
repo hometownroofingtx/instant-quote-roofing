@@ -7,6 +7,7 @@
   document.querySelectorAll('#htr-rr, [data-htr-search-redirect], [data-htr-calculator]').forEach(function (root) {
   var redirect = root.dataset.htrSearchRedirect;
   var calculator = root.hasAttribute('data-htr-calculator');
+  var backend = C.backend === true && !!C.adminNonce;
   var quoteCopy = {};
   try { quoteCopy = JSON.parse(root.dataset.quoteCopy || '{}'); } catch (e) {}
   var selectedPlaceId = null;
@@ -21,10 +22,11 @@
   async function api(action, data) {
     var body = JSON.stringify(data), res, j;
     try {
-      res = await fetch(C.ajaxUrl + '?action=htr_rr_' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: body });
+      res = await fetch(C.ajaxUrl + '?action=htr_rr_' + action + (action === 'admin_quote' ? '&nonce=' + encodeURIComponent(C.adminNonce) : ''), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: body });
       j = await res.json();
       return { ok: res.ok, status: res.status, json: j };
     } catch (e) { /* not JSON (e.g. "0") or network: try REST */ }
+    if (action === 'admin_quote') throw new Error('Could not save the internal quote. Please retry or reload the page.');
     res = await fetch(C.restUrl + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body });
     j = await res.json().catch(function () { return {}; });
     return { ok: res.ok, status: res.status, json: j };
@@ -38,6 +40,7 @@
   function focusCard(n) {
     var journey = root.dataset.journey === 'three';
     var major = n <= 3 ? 1 : n === 4 ? 2 : 3;
+    if (backend) major = n <= 3 ? 1 : 2;
     if (journey && n === 3) state.propertyConfirmed = true;
     if (journey && n === 4 && (!state.propertyConfirmed || !state.material || state.lat == null)) return;
     if (root.classList.contains('htr-rr-wizard')) {
@@ -54,7 +57,7 @@
         if (step === current) item.setAttribute('aria-current', 'step'); else item.removeAttribute('aria-current');
       });
       var status = $('[data-journey-status]');
-      if (status) status.textContent = 'Step ' + major + ' of 3';
+      if (status) status.textContent = 'Step ' + major + ' of ' + (backend ? '2' : '3');
       var summary = $('[data-property-summary]');
       if (summary) {
         var material = $$('.htr-rr-mat').find(function (button) { return button.dataset.mat === state.material; });
@@ -218,7 +221,7 @@
    * The report is saved and priced first (prepare), then the GHL form is shown with the report number and roof type
    * pre-filled. Only a server-confirmed contact link reveals the prepared estimate.
    * Browser completion never changes lead status; n8n remains responsible for linking contact details. */
-  var ghlMode = C.contactMode === 'ghl_form' && !!C.ghlFormId;
+  var ghlMode = !backend && C.contactMode === 'ghl_form' && !!C.ghlFormId;
   function embedGhlForm(box, prep, onDone) {
     if (box._ghlCleanup) box._ghlCleanup();
     var q = new URLSearchParams();
@@ -517,6 +520,7 @@
     $$('[data-quote-back]').forEach(function (button) { button.addEventListener('click', function () { if (!state.mapLocked) focusCard(Number(button.dataset.quoteBack)); }); });
     $('[data-quote-contact]').addEventListener('click', function () {
       if (!state.material || (root.dataset.journey === 'three' && !state.propertyConfirmed)) return;
+      if (backend) { generateInternalQuote(); return; }
       unlock(4); focusCard(4); if (ghlMode) ghlPrepare();
     });
   }
@@ -621,7 +625,24 @@
     }
   }
   /* ---------- Step 4: contact + submit ---------- */
-  if (!ghlMode) $('#htr-rr-form').addEventListener('submit', async function (ev) {
+  async function generateInternalQuote() {
+    if (state.saving || state.mapLocked) return;
+    state.saving = true;
+    var button = $('[data-quote-contact]');
+    button.disabled = true;
+    unlock(5); focusCard(5); progress(3);
+    try {
+      var out = await api('admin_quote', { address: state.address, city: state.city, zip: state.zip, lat: state.lat, lng: state.lng, material: state.material, source_url: location.href });
+      var j = out.json || {};
+      if (!out.ok || !j.ok) throw new Error(j.message || 'Could not generate the internal quote. Please retry.');
+      state.report = j.report;
+      state.mapLocked = true;
+      unlock(6); progress(6); renderResult(j.report); focusCard(6);
+    } catch (error) { focusCard(3); show('#htr-rr-err1', error.message); }
+    finally { state.saving = false; button.disabled = false; }
+  }
+
+  if (!backend && !ghlMode) $('#htr-rr-form').addEventListener('submit', async function (ev) {
     ev.preventDefault();
     var f = ev.target, btn = $('#htr-rr-submit');
     show('#htr-rr-err4', '');
@@ -682,7 +703,7 @@
         '<p class="htr-rr-note">Roof area, pitch and roof faces are measured from Google aerial imagery' + (r.imageryDate ? ' taken ' + esc(r.imageryDate.slice(0, 7)) : '') + '. The diagrams are drawn to the measured size and pitch; exact ridge, hip, valley and eave lines are confirmed during your free inspection.</p>';
       if (r.needsReview) h += '<p class="htr-rr-alert">Our team will double-check these measurements and confirm your estimate.</p>';
     } else {
-      h += '<div class="htr-rr-alert">We could not measure this roof from aerial imagery. Our team has your details and will contact you to measure it in person, free of charge.</div>';
+      h += '<div class="htr-rr-alert">' + (backend ? 'Aerial measurements are unavailable. Manual measurements are needed; no report was saved and no lead was sent.' : 'We could not measure this roof from aerial imagery. Our team has your details and will contact you to measure it in person, free of charge.') + '</div>';
     }
     h += '<div class="htr-rr-actions">' +
       '<a class="htr-rr-btn" href="' + esc(r.url) + '&print=1" target="_blank" rel="noopener" aria-describedby="htr-rr-download-help">Download report (PDF)</a>' +
@@ -696,7 +717,13 @@
     $('#htr-rr-result').innerHTML = h;
     var reportActions = $$('#htr-rr-result .htr-rr-actions > *');
     ['download', 'email', 'details'].forEach(function (key, i) { if (quoteCopy[key] && reportActions[i]) reportActions[i].textContent = quoteCopy[key]; });
-    $('#htr-rr-mail').addEventListener('click', mailCopy);
+    if (backend) {
+      $('#htr-rr-mail').remove();
+      var nextSteps = $('#htr-rr-result .htr-rr-next'); if (nextSteps) nextSteps.remove();
+      var notice = document.createElement('p'); notice.className = 'htr-rr-note';
+      notice.textContent = 'Preview only. Nothing was added to Reports. Download or view this quote within one hour using your administrator session.';
+      $('#htr-rr-result').prepend(notice);
+    } else { $('#htr-rr-mail').addEventListener('click', mailCopy); }
     if (r.measured) show3d(r);
   }
 
